@@ -1,0 +1,6 @@
+[submodule "observer"]
+	path = observer
+	url = https://github.com/egd060708/observer_module.git
+[submodule "controller"]
+	path = controller
+	url = https://github.com/egd060708/controller_module.git

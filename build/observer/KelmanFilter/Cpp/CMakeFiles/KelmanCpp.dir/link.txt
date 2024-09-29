@@ -1,0 +1,2 @@
+D:\usefulTools\MinGW\mingw64\bin\ar.exe qc libKelmanCpp.a CMakeFiles/KelmanCpp.dir/source/kelmanFilter.cpp.obj
+D:\usefulTools\MinGW\mingw64\bin\ranlib.exe libKelmanCpp.a

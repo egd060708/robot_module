@@ -1,0 +1,2 @@
+D:\usefulTools\MinGW\mingw64\bin\ar.exe qc libQuadCpp.a CMakeFiles/QuadCpp.dir/source/quadruped.cpp.obj
+D:\usefulTools\MinGW\mingw64\bin\ranlib.exe libQuadCpp.a

@@ -1,0 +1,2 @@
+D:\usefulTools\MinGW\mingw64\bin\ar.exe qc libBodyCpp.a CMakeFiles/BodyCpp.dir/source/Body.cpp.obj
+D:\usefulTools\MinGW\mingw64\bin\ranlib.exe libBodyCpp.a
