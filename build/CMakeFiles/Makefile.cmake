@@ -8,16 +8,12 @@ set(CMAKE_DEPENDS_GENERATOR "MinGW Makefiles")
 set(CMAKE_MAKEFILE_DEPENDS
   "CMakeCache.txt"
   "D:/Git_Project/github/robot_module/CMakeLists.txt"
-  "D:/Git_Project/github/robot_module/Quadruped/Cpp/CMakeLists.txt"
+  "D:/Git_Project/github/robot_module/Quadruped/C/CMakeLists.txt"
   "CMakeFiles/3.30.0-rc1/CMakeCCompiler.cmake"
-  "CMakeFiles/3.30.0-rc1/CMakeCXXCompiler.cmake"
   "CMakeFiles/3.30.0-rc1/CMakeRCCompiler.cmake"
   "CMakeFiles/3.30.0-rc1/CMakeSystem.cmake"
-  "D:/Git_Project/github/robot_module/controller/Mpc/Cpp/CMakeLists.txt"
-  "D:/Git_Project/github/robot_module/controller/Pid/Cpp/CMakeLists.txt"
-  "D:/Git_Project/github/robot_module/observer/KelmanFilter/Cpp/CMakeLists.txt"
+  "D:/Git_Project/github/robot_module/myMath/C/CMakeLists.txt"
   "D:/usefulTools/Cmake/share/cmake-3.30/Modules/CMakeCInformation.cmake"
-  "D:/usefulTools/Cmake/share/cmake-3.30/Modules/CMakeCXXInformation.cmake"
   "D:/usefulTools/Cmake/share/cmake-3.30/Modules/CMakeCommonLanguageInclude.cmake"
   "D:/usefulTools/Cmake/share/cmake-3.30/Modules/CMakeGenericSystem.cmake"
   "D:/usefulTools/Cmake/share/cmake-3.30/Modules/CMakeInitializeConfigs.cmake"
@@ -27,12 +23,9 @@ set(CMAKE_MAKEFILE_DEPENDS
   "D:/usefulTools/Cmake/share/cmake-3.30/Modules/CMakeSystemSpecificInitialize.cmake"
   "D:/usefulTools/Cmake/share/cmake-3.30/Modules/Compiler/CMakeCommonCompilerMacros.cmake"
   "D:/usefulTools/Cmake/share/cmake-3.30/Modules/Compiler/GNU-C.cmake"
-  "D:/usefulTools/Cmake/share/cmake-3.30/Modules/Compiler/GNU-CXX.cmake"
   "D:/usefulTools/Cmake/share/cmake-3.30/Modules/Compiler/GNU.cmake"
   "D:/usefulTools/Cmake/share/cmake-3.30/Modules/Platform/Windows-GNU-C-ABI.cmake"
   "D:/usefulTools/Cmake/share/cmake-3.30/Modules/Platform/Windows-GNU-C.cmake"
-  "D:/usefulTools/Cmake/share/cmake-3.30/Modules/Platform/Windows-GNU-CXX-ABI.cmake"
-  "D:/usefulTools/Cmake/share/cmake-3.30/Modules/Platform/Windows-GNU-CXX.cmake"
   "D:/usefulTools/Cmake/share/cmake-3.30/Modules/Platform/Windows-GNU.cmake"
   "D:/usefulTools/Cmake/share/cmake-3.30/Modules/Platform/Windows-Initialize.cmake"
   "D:/usefulTools/Cmake/share/cmake-3.30/Modules/Platform/Windows-windres.cmake"
@@ -49,17 +42,13 @@ set(CMAKE_MAKEFILE_OUTPUTS
 # Byproducts of CMake generate step:
 set(CMAKE_MAKEFILE_PRODUCTS
   "CMakeFiles/CMakeDirectoryInformation.cmake"
-  "controller/Pid/Cpp/CMakeFiles/CMakeDirectoryInformation.cmake"
-  "observer/KelmanFilter/Cpp/CMakeFiles/CMakeDirectoryInformation.cmake"
-  "controller/Mpc/Cpp/CMakeFiles/CMakeDirectoryInformation.cmake"
-  "Quadruped/Cpp/CMakeFiles/CMakeDirectoryInformation.cmake"
+  "myMath/C/CMakeFiles/CMakeDirectoryInformation.cmake"
+  "Quadruped/C/CMakeFiles/CMakeDirectoryInformation.cmake"
   )
 
 # Dependency information for all targets:
 set(CMAKE_DEPEND_INFO_FILES
   "CMakeFiles/Testfile.dir/DependInfo.cmake"
-  "controller/Pid/Cpp/CMakeFiles/PidCpp.dir/DependInfo.cmake"
-  "observer/KelmanFilter/Cpp/CMakeFiles/KelmanCpp.dir/DependInfo.cmake"
-  "controller/Mpc/Cpp/CMakeFiles/MpcCpp.dir/DependInfo.cmake"
-  "Quadruped/Cpp/CMakeFiles/BodyCpp.dir/DependInfo.cmake"
+  "myMath/C/CMakeFiles/MathC.dir/DependInfo.cmake"
+  "Quadruped/C/CMakeFiles/QuadC.dir/DependInfo.cmake"
   )

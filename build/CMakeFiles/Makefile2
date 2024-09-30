@@ -63,95 +63,57 @@ CMAKE_BINARY_DIR = D:\Git_Project\github\robot_module\build
 
 # The main recursive "all" target.
 all: CMakeFiles/Testfile.dir/all
-all: controller/Pid/Cpp/all
-all: observer/KelmanFilter/Cpp/all
-all: controller/Mpc/Cpp/all
-all: Quadruped/Cpp/all
+all: myMath/C/all
+all: Quadruped/C/all
 .PHONY : all
 
 # The main recursive "preinstall" target.
-preinstall: controller/Pid/Cpp/preinstall
-preinstall: observer/KelmanFilter/Cpp/preinstall
-preinstall: controller/Mpc/Cpp/preinstall
-preinstall: Quadruped/Cpp/preinstall
+preinstall: myMath/C/preinstall
+preinstall: Quadruped/C/preinstall
 .PHONY : preinstall
 
 # The main recursive "clean" target.
 clean: CMakeFiles/Testfile.dir/clean
-clean: controller/Pid/Cpp/clean
-clean: observer/KelmanFilter/Cpp/clean
-clean: controller/Mpc/Cpp/clean
-clean: Quadruped/Cpp/clean
+clean: myMath/C/clean
+clean: Quadruped/C/clean
 .PHONY : clean
 
 #=============================================================================
-# Directory level rules for directory Quadruped/Cpp
+# Directory level rules for directory Quadruped/C
 
 # Recursive "all" directory target.
-Quadruped/Cpp/all: Quadruped/Cpp/CMakeFiles/BodyCpp.dir/all
-.PHONY : Quadruped/Cpp/all
+Quadruped/C/all: Quadruped/C/CMakeFiles/QuadC.dir/all
+.PHONY : Quadruped/C/all
 
 # Recursive "preinstall" directory target.
-Quadruped/Cpp/preinstall:
-.PHONY : Quadruped/Cpp/preinstall
+Quadruped/C/preinstall:
+.PHONY : Quadruped/C/preinstall
 
 # Recursive "clean" directory target.
-Quadruped/Cpp/clean: Quadruped/Cpp/CMakeFiles/BodyCpp.dir/clean
-.PHONY : Quadruped/Cpp/clean
+Quadruped/C/clean: Quadruped/C/CMakeFiles/QuadC.dir/clean
+.PHONY : Quadruped/C/clean
 
 #=============================================================================
-# Directory level rules for directory controller/Mpc/Cpp
+# Directory level rules for directory myMath/C
 
 # Recursive "all" directory target.
-controller/Mpc/Cpp/all: controller/Mpc/Cpp/CMakeFiles/MpcCpp.dir/all
-.PHONY : controller/Mpc/Cpp/all
+myMath/C/all: myMath/C/CMakeFiles/MathC.dir/all
+.PHONY : myMath/C/all
 
 # Recursive "preinstall" directory target.
-controller/Mpc/Cpp/preinstall:
-.PHONY : controller/Mpc/Cpp/preinstall
+myMath/C/preinstall:
+.PHONY : myMath/C/preinstall
 
 # Recursive "clean" directory target.
-controller/Mpc/Cpp/clean: controller/Mpc/Cpp/CMakeFiles/MpcCpp.dir/clean
-.PHONY : controller/Mpc/Cpp/clean
-
-#=============================================================================
-# Directory level rules for directory controller/Pid/Cpp
-
-# Recursive "all" directory target.
-controller/Pid/Cpp/all: controller/Pid/Cpp/CMakeFiles/PidCpp.dir/all
-.PHONY : controller/Pid/Cpp/all
-
-# Recursive "preinstall" directory target.
-controller/Pid/Cpp/preinstall:
-.PHONY : controller/Pid/Cpp/preinstall
-
-# Recursive "clean" directory target.
-controller/Pid/Cpp/clean: controller/Pid/Cpp/CMakeFiles/PidCpp.dir/clean
-.PHONY : controller/Pid/Cpp/clean
-
-#=============================================================================
-# Directory level rules for directory observer/KelmanFilter/Cpp
-
-# Recursive "all" directory target.
-observer/KelmanFilter/Cpp/all: observer/KelmanFilter/Cpp/CMakeFiles/KelmanCpp.dir/all
-.PHONY : observer/KelmanFilter/Cpp/all
-
-# Recursive "preinstall" directory target.
-observer/KelmanFilter/Cpp/preinstall:
-.PHONY : observer/KelmanFilter/Cpp/preinstall
-
-# Recursive "clean" directory target.
-observer/KelmanFilter/Cpp/clean: observer/KelmanFilter/Cpp/CMakeFiles/KelmanCpp.dir/clean
-.PHONY : observer/KelmanFilter/Cpp/clean
+myMath/C/clean: myMath/C/CMakeFiles/MathC.dir/clean
+.PHONY : myMath/C/clean
 
 #=============================================================================
 # Target rules for target CMakeFiles/Testfile.dir
 
 # All Build rule for target.
-CMakeFiles/Testfile.dir/all: controller/Pid/Cpp/CMakeFiles/PidCpp.dir/all
-CMakeFiles/Testfile.dir/all: observer/KelmanFilter/Cpp/CMakeFiles/KelmanCpp.dir/all
-CMakeFiles/Testfile.dir/all: controller/Mpc/Cpp/CMakeFiles/MpcCpp.dir/all
-CMakeFiles/Testfile.dir/all: Quadruped/Cpp/CMakeFiles/BodyCpp.dir/all
+CMakeFiles/Testfile.dir/all: myMath/C/CMakeFiles/MathC.dir/all
+CMakeFiles/Testfile.dir/all: Quadruped/C/CMakeFiles/QuadC.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\Testfile.dir\build.make CMakeFiles/Testfile.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\Testfile.dir\build.make CMakeFiles/Testfile.dir/build
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=D:\Git_Project\github\robot_module\build\CMakeFiles --progress-num=9,10 "Built target Testfile"
@@ -174,110 +136,56 @@ CMakeFiles/Testfile.dir/clean:
 .PHONY : CMakeFiles/Testfile.dir/clean
 
 #=============================================================================
-# Target rules for target controller/Pid/Cpp/CMakeFiles/PidCpp.dir
+# Target rules for target myMath/C/CMakeFiles/MathC.dir
 
 # All Build rule for target.
-controller/Pid/Cpp/CMakeFiles/PidCpp.dir/all:
-	$(MAKE) $(MAKESILENT) -f controller\Pid\Cpp\CMakeFiles\PidCpp.dir\build.make controller/Pid/Cpp/CMakeFiles/PidCpp.dir/depend
-	$(MAKE) $(MAKESILENT) -f controller\Pid\Cpp\CMakeFiles\PidCpp.dir\build.make controller/Pid/Cpp/CMakeFiles/PidCpp.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=D:\Git_Project\github\robot_module\build\CMakeFiles --progress-num=7,8 "Built target PidCpp"
-.PHONY : controller/Pid/Cpp/CMakeFiles/PidCpp.dir/all
+myMath/C/CMakeFiles/MathC.dir/all:
+	$(MAKE) $(MAKESILENT) -f myMath\C\CMakeFiles\MathC.dir\build.make myMath/C/CMakeFiles/MathC.dir/depend
+	$(MAKE) $(MAKESILENT) -f myMath\C\CMakeFiles\MathC.dir\build.make myMath/C/CMakeFiles/MathC.dir/build
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=D:\Git_Project\github\robot_module\build\CMakeFiles --progress-num=1,2,3 "Built target MathC"
+.PHONY : myMath/C/CMakeFiles/MathC.dir/all
 
 # Build rule for subdir invocation for target.
-controller/Pid/Cpp/CMakeFiles/PidCpp.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start D:\Git_Project\github\robot_module\build\CMakeFiles 2
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\Makefile2 controller/Pid/Cpp/CMakeFiles/PidCpp.dir/all
+myMath/C/CMakeFiles/MathC.dir/rule: cmake_check_build_system
+	$(CMAKE_COMMAND) -E cmake_progress_start D:\Git_Project\github\robot_module\build\CMakeFiles 3
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\Makefile2 myMath/C/CMakeFiles/MathC.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start D:\Git_Project\github\robot_module\build\CMakeFiles 0
-.PHONY : controller/Pid/Cpp/CMakeFiles/PidCpp.dir/rule
+.PHONY : myMath/C/CMakeFiles/MathC.dir/rule
 
 # Convenience name for target.
-PidCpp: controller/Pid/Cpp/CMakeFiles/PidCpp.dir/rule
-.PHONY : PidCpp
+MathC: myMath/C/CMakeFiles/MathC.dir/rule
+.PHONY : MathC
 
 # clean rule for target.
-controller/Pid/Cpp/CMakeFiles/PidCpp.dir/clean:
-	$(MAKE) $(MAKESILENT) -f controller\Pid\Cpp\CMakeFiles\PidCpp.dir\build.make controller/Pid/Cpp/CMakeFiles/PidCpp.dir/clean
-.PHONY : controller/Pid/Cpp/CMakeFiles/PidCpp.dir/clean
+myMath/C/CMakeFiles/MathC.dir/clean:
+	$(MAKE) $(MAKESILENT) -f myMath\C\CMakeFiles\MathC.dir\build.make myMath/C/CMakeFiles/MathC.dir/clean
+.PHONY : myMath/C/CMakeFiles/MathC.dir/clean
 
 #=============================================================================
-# Target rules for target observer/KelmanFilter/Cpp/CMakeFiles/KelmanCpp.dir
+# Target rules for target Quadruped/C/CMakeFiles/QuadC.dir
 
 # All Build rule for target.
-observer/KelmanFilter/Cpp/CMakeFiles/KelmanCpp.dir/all:
-	$(MAKE) $(MAKESILENT) -f observer\KelmanFilter\Cpp\CMakeFiles\KelmanCpp.dir\build.make observer/KelmanFilter/Cpp/CMakeFiles/KelmanCpp.dir/depend
-	$(MAKE) $(MAKESILENT) -f observer\KelmanFilter\Cpp\CMakeFiles\KelmanCpp.dir\build.make observer/KelmanFilter/Cpp/CMakeFiles/KelmanCpp.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=D:\Git_Project\github\robot_module\build\CMakeFiles --progress-num=3,4 "Built target KelmanCpp"
-.PHONY : observer/KelmanFilter/Cpp/CMakeFiles/KelmanCpp.dir/all
+Quadruped/C/CMakeFiles/QuadC.dir/all: myMath/C/CMakeFiles/MathC.dir/all
+	$(MAKE) $(MAKESILENT) -f Quadruped\C\CMakeFiles\QuadC.dir\build.make Quadruped/C/CMakeFiles/QuadC.dir/depend
+	$(MAKE) $(MAKESILENT) -f Quadruped\C\CMakeFiles\QuadC.dir\build.make Quadruped/C/CMakeFiles/QuadC.dir/build
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=D:\Git_Project\github\robot_module\build\CMakeFiles --progress-num=4,5,6,7,8 "Built target QuadC"
+.PHONY : Quadruped/C/CMakeFiles/QuadC.dir/all
 
 # Build rule for subdir invocation for target.
-observer/KelmanFilter/Cpp/CMakeFiles/KelmanCpp.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start D:\Git_Project\github\robot_module\build\CMakeFiles 2
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\Makefile2 observer/KelmanFilter/Cpp/CMakeFiles/KelmanCpp.dir/all
-	$(CMAKE_COMMAND) -E cmake_progress_start D:\Git_Project\github\robot_module\build\CMakeFiles 0
-.PHONY : observer/KelmanFilter/Cpp/CMakeFiles/KelmanCpp.dir/rule
-
-# Convenience name for target.
-KelmanCpp: observer/KelmanFilter/Cpp/CMakeFiles/KelmanCpp.dir/rule
-.PHONY : KelmanCpp
-
-# clean rule for target.
-observer/KelmanFilter/Cpp/CMakeFiles/KelmanCpp.dir/clean:
-	$(MAKE) $(MAKESILENT) -f observer\KelmanFilter\Cpp\CMakeFiles\KelmanCpp.dir\build.make observer/KelmanFilter/Cpp/CMakeFiles/KelmanCpp.dir/clean
-.PHONY : observer/KelmanFilter/Cpp/CMakeFiles/KelmanCpp.dir/clean
-
-#=============================================================================
-# Target rules for target controller/Mpc/Cpp/CMakeFiles/MpcCpp.dir
-
-# All Build rule for target.
-controller/Mpc/Cpp/CMakeFiles/MpcCpp.dir/all:
-	$(MAKE) $(MAKESILENT) -f controller\Mpc\Cpp\CMakeFiles\MpcCpp.dir\build.make controller/Mpc/Cpp/CMakeFiles/MpcCpp.dir/depend
-	$(MAKE) $(MAKESILENT) -f controller\Mpc\Cpp\CMakeFiles\MpcCpp.dir\build.make controller/Mpc/Cpp/CMakeFiles/MpcCpp.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=D:\Git_Project\github\robot_module\build\CMakeFiles --progress-num=5,6 "Built target MpcCpp"
-.PHONY : controller/Mpc/Cpp/CMakeFiles/MpcCpp.dir/all
-
-# Build rule for subdir invocation for target.
-controller/Mpc/Cpp/CMakeFiles/MpcCpp.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start D:\Git_Project\github\robot_module\build\CMakeFiles 2
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\Makefile2 controller/Mpc/Cpp/CMakeFiles/MpcCpp.dir/all
-	$(CMAKE_COMMAND) -E cmake_progress_start D:\Git_Project\github\robot_module\build\CMakeFiles 0
-.PHONY : controller/Mpc/Cpp/CMakeFiles/MpcCpp.dir/rule
-
-# Convenience name for target.
-MpcCpp: controller/Mpc/Cpp/CMakeFiles/MpcCpp.dir/rule
-.PHONY : MpcCpp
-
-# clean rule for target.
-controller/Mpc/Cpp/CMakeFiles/MpcCpp.dir/clean:
-	$(MAKE) $(MAKESILENT) -f controller\Mpc\Cpp\CMakeFiles\MpcCpp.dir\build.make controller/Mpc/Cpp/CMakeFiles/MpcCpp.dir/clean
-.PHONY : controller/Mpc/Cpp/CMakeFiles/MpcCpp.dir/clean
-
-#=============================================================================
-# Target rules for target Quadruped/Cpp/CMakeFiles/BodyCpp.dir
-
-# All Build rule for target.
-Quadruped/Cpp/CMakeFiles/BodyCpp.dir/all: controller/Pid/Cpp/CMakeFiles/PidCpp.dir/all
-Quadruped/Cpp/CMakeFiles/BodyCpp.dir/all: observer/KelmanFilter/Cpp/CMakeFiles/KelmanCpp.dir/all
-Quadruped/Cpp/CMakeFiles/BodyCpp.dir/all: controller/Mpc/Cpp/CMakeFiles/MpcCpp.dir/all
-	$(MAKE) $(MAKESILENT) -f Quadruped\Cpp\CMakeFiles\BodyCpp.dir\build.make Quadruped/Cpp/CMakeFiles/BodyCpp.dir/depend
-	$(MAKE) $(MAKESILENT) -f Quadruped\Cpp\CMakeFiles\BodyCpp.dir\build.make Quadruped/Cpp/CMakeFiles/BodyCpp.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=D:\Git_Project\github\robot_module\build\CMakeFiles --progress-num=1,2 "Built target BodyCpp"
-.PHONY : Quadruped/Cpp/CMakeFiles/BodyCpp.dir/all
-
-# Build rule for subdir invocation for target.
-Quadruped/Cpp/CMakeFiles/BodyCpp.dir/rule: cmake_check_build_system
+Quadruped/C/CMakeFiles/QuadC.dir/rule: cmake_check_build_system
 	$(CMAKE_COMMAND) -E cmake_progress_start D:\Git_Project\github\robot_module\build\CMakeFiles 8
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\Makefile2 Quadruped/Cpp/CMakeFiles/BodyCpp.dir/all
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\Makefile2 Quadruped/C/CMakeFiles/QuadC.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start D:\Git_Project\github\robot_module\build\CMakeFiles 0
-.PHONY : Quadruped/Cpp/CMakeFiles/BodyCpp.dir/rule
+.PHONY : Quadruped/C/CMakeFiles/QuadC.dir/rule
 
 # Convenience name for target.
-BodyCpp: Quadruped/Cpp/CMakeFiles/BodyCpp.dir/rule
-.PHONY : BodyCpp
+QuadC: Quadruped/C/CMakeFiles/QuadC.dir/rule
+.PHONY : QuadC
 
 # clean rule for target.
-Quadruped/Cpp/CMakeFiles/BodyCpp.dir/clean:
-	$(MAKE) $(MAKESILENT) -f Quadruped\Cpp\CMakeFiles\BodyCpp.dir\build.make Quadruped/Cpp/CMakeFiles/BodyCpp.dir/clean
-.PHONY : Quadruped/Cpp/CMakeFiles/BodyCpp.dir/clean
+Quadruped/C/CMakeFiles/QuadC.dir/clean:
+	$(MAKE) $(MAKESILENT) -f Quadruped\C\CMakeFiles\QuadC.dir\build.make Quadruped/C/CMakeFiles/QuadC.dir/clean
+.PHONY : Quadruped/C/CMakeFiles/QuadC.dir/clean
 
 #=============================================================================
 # Special targets to cleanup operation of make.

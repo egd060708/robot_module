@@ -4,3 +4,6 @@
 [submodule "controller"]
 	path = controller
 	url = https://github.com/egd060708/controller_module.git
+[submodule "myMath"]
+	path = myMath
+	url = https://github.com/egd060708/math_module.git

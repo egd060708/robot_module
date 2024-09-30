@@ -129,80 +129,54 @@ Testfile/fast:
 .PHONY : Testfile/fast
 
 #=============================================================================
-# Target rules for targets named PidCpp
+# Target rules for targets named MathC
 
 # Build rule for target.
-PidCpp: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\Makefile2 PidCpp
-.PHONY : PidCpp
+MathC: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\Makefile2 MathC
+.PHONY : MathC
 
 # fast build rule for target.
-PidCpp/fast:
-	$(MAKE) $(MAKESILENT) -f controller\Pid\Cpp\CMakeFiles\PidCpp.dir\build.make controller/Pid/Cpp/CMakeFiles/PidCpp.dir/build
-.PHONY : PidCpp/fast
+MathC/fast:
+	$(MAKE) $(MAKESILENT) -f myMath\C\CMakeFiles\MathC.dir\build.make myMath/C/CMakeFiles/MathC.dir/build
+.PHONY : MathC/fast
 
 #=============================================================================
-# Target rules for targets named KelmanCpp
+# Target rules for targets named QuadC
 
 # Build rule for target.
-KelmanCpp: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\Makefile2 KelmanCpp
-.PHONY : KelmanCpp
+QuadC: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\Makefile2 QuadC
+.PHONY : QuadC
 
 # fast build rule for target.
-KelmanCpp/fast:
-	$(MAKE) $(MAKESILENT) -f observer\KelmanFilter\Cpp\CMakeFiles\KelmanCpp.dir\build.make observer/KelmanFilter/Cpp/CMakeFiles/KelmanCpp.dir/build
-.PHONY : KelmanCpp/fast
+QuadC/fast:
+	$(MAKE) $(MAKESILENT) -f Quadruped\C\CMakeFiles\QuadC.dir\build.make Quadruped/C/CMakeFiles/QuadC.dir/build
+.PHONY : QuadC/fast
 
-#=============================================================================
-# Target rules for targets named MpcCpp
-
-# Build rule for target.
-MpcCpp: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\Makefile2 MpcCpp
-.PHONY : MpcCpp
-
-# fast build rule for target.
-MpcCpp/fast:
-	$(MAKE) $(MAKESILENT) -f controller\Mpc\Cpp\CMakeFiles\MpcCpp.dir\build.make controller/Mpc/Cpp/CMakeFiles/MpcCpp.dir/build
-.PHONY : MpcCpp/fast
-
-#=============================================================================
-# Target rules for targets named BodyCpp
-
-# Build rule for target.
-BodyCpp: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\Makefile2 BodyCpp
-.PHONY : BodyCpp
-
-# fast build rule for target.
-BodyCpp/fast:
-	$(MAKE) $(MAKESILENT) -f Quadruped\Cpp\CMakeFiles\BodyCpp.dir\build.make Quadruped/Cpp/CMakeFiles/BodyCpp.dir/build
-.PHONY : BodyCpp/fast
-
-test.obj: test.cpp.obj
+test.obj: test.c.obj
 .PHONY : test.obj
 
 # target to build an object file
-test.cpp.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\Testfile.dir\build.make CMakeFiles/Testfile.dir/test.cpp.obj
-.PHONY : test.cpp.obj
+test.c.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\Testfile.dir\build.make CMakeFiles/Testfile.dir/test.c.obj
+.PHONY : test.c.obj
 
-test.i: test.cpp.i
+test.i: test.c.i
 .PHONY : test.i
 
 # target to preprocess a source file
-test.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\Testfile.dir\build.make CMakeFiles/Testfile.dir/test.cpp.i
-.PHONY : test.cpp.i
+test.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\Testfile.dir\build.make CMakeFiles/Testfile.dir/test.c.i
+.PHONY : test.c.i
 
-test.s: test.cpp.s
+test.s: test.c.s
 .PHONY : test.s
 
 # target to generate assembly for a file
-test.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\Testfile.dir\build.make CMakeFiles/Testfile.dir/test.cpp.s
-.PHONY : test.cpp.s
+test.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\Testfile.dir\build.make CMakeFiles/Testfile.dir/test.c.s
+.PHONY : test.c.s
 
 # Help Target
 help:
@@ -212,10 +186,8 @@ help:
 	@echo ... depend
 	@echo ... edit_cache
 	@echo ... rebuild_cache
-	@echo ... BodyCpp
-	@echo ... KelmanCpp
-	@echo ... MpcCpp
-	@echo ... PidCpp
+	@echo ... MathC
+	@echo ... QuadC
 	@echo ... Testfile
 	@echo ... test.obj
 	@echo ... test.i

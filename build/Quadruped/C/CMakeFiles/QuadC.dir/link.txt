@@ -1,0 +1,2 @@
+D:\usefulTools\MinGW\mingw64\bin\ar.exe qc libQuadC.a CMakeFiles/QuadC.dir/source/Body.c.obj CMakeFiles/QuadC.dir/source/GaitCtrl.c.obj CMakeFiles/QuadC.dir/source/Leg.c.obj CMakeFiles/QuadC.dir/source/LegCtrl.c.obj
+D:\usefulTools\MinGW\mingw64\bin\ranlib.exe libQuadC.a

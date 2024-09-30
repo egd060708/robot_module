@@ -1,0 +1,2 @@
+D:\usefulTools\MinGW\mingw64\bin\ar.exe qc libMathC.a CMakeFiles/MathC.dir/source/mathPrint.c.obj CMakeFiles/MathC.dir/source/mathTool.c.obj
+D:\usefulTools\MinGW\mingw64\bin\ranlib.exe libMathC.a

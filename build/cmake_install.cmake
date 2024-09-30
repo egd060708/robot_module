@@ -39,10 +39,8 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for each subdirectory.
-  include("D:/Git_Project/github/robot_module/build/controller/Pid/Cpp/cmake_install.cmake")
-  include("D:/Git_Project/github/robot_module/build/observer/KelmanFilter/Cpp/cmake_install.cmake")
-  include("D:/Git_Project/github/robot_module/build/controller/Mpc/Cpp/cmake_install.cmake")
-  include("D:/Git_Project/github/robot_module/build/Quadruped/Cpp/cmake_install.cmake")
+  include("D:/Git_Project/github/robot_module/build/myMath/C/cmake_install.cmake")
+  include("D:/Git_Project/github/robot_module/build/Quadruped/C/cmake_install.cmake")
 
 endif()
 

@@ -1,1 +1,1 @@
- Quadruped/Cpp/libBodyCpp.a controller/Pid/Cpp/libPidCpp.a observer/KelmanFilter/Cpp/libKelmanCpp.a controller/Mpc/Cpp/libMpcCpp.a D:/Git_Project/github/robot_module/controller/Mpc/Cpp/libs/libqpOASES.a -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32 
+ Quadruped/C/libQuadC.a myMath/C/libMathC.a -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32 

@@ -246,6 +246,9 @@ CMAKE_VERBOSE_MAKEFILE:BOOL=FALSE
 MpcCpp_LIB_DEPENDS:STATIC=general;D:/Git_Project/github/robot_module/controller/Mpc/Cpp/libs/libqpOASES.a;
 
 //Dependencies for the target
+QuadC_LIB_DEPENDS:STATIC=general;MathC;
+
+//Dependencies for the target
 QuadCpp_LIB_DEPENDS:STATIC=general;KelmanCpp;general;PidCpp;general;MpcCpp;
 
 //Value Computed by CMake
@@ -364,7 +367,7 @@ CMAKE_MODULE_LINKER_FLAGS_RELWITHDEBINFO-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: CMAKE_NM
 CMAKE_NM-ADVANCED:INTERNAL=1
 //number of local generators
-CMAKE_NUMBER_OF_MAKEFILES:INTERNAL=5
+CMAKE_NUMBER_OF_MAKEFILES:INTERNAL=3
 //ADVANCED property for variable: CMAKE_OBJCOPY
 CMAKE_OBJCOPY-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: CMAKE_OBJDUMP

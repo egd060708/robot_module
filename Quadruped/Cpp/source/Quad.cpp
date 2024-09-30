@@ -3,3 +3,4 @@
 #include "GaitCtrl.h"
 #include "Leg.h"
 #include "LegCtrl.h"
+#include "virtualLegCtrl.h"
