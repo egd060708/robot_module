@@ -1,7 +1,7 @@
 #include "LegCtrl.h"
 #include <math.h>
 #include "mathTool.h"
-#include "main.h"
+#include "mathPrint.h"
 
 /* 初始化腿部控制参数 */
 void InitLegCtrl(Leg_Ctrl_Param* _param, double _kpp[3], double _kdp[3], double _kpt[3], double _t)
