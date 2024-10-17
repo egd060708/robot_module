@@ -1,6 +1,8 @@
 #ifndef __LEG_H
 #define __LEG_H
 
+#define DOF 2
+
 enum leg_id
 {
     LF = 0,
@@ -41,7 +43,7 @@ typedef struct _LegS
     double jacobiI[3][3];
 }LegS;
 
-void InitLeg(LegS* _leg, double _l1, double _l2, double _l3, double _ratio);
+void InitLeg(LegS* _leg, double* _links, double _ratio);
 void LegJacobiCal(LegS* _leg, JointS* _joint);
 void LegInvJacobiCal(LegS* _leg, JointS* _joint);
 void LegFkCal(EndS* _end, JointS* _joint, LegParamS* _para);
