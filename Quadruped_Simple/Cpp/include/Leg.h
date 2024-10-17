@@ -29,7 +29,8 @@ typedef struct _JointS
 typedef struct _LegParamS
 {
     double L[3];
-    double ratio;// 该参数用于分辨极性，为正负1
+    double ratio;// 该参数用于分辨腿长极性，为正负1
+    int dir = 0;// 正反屈参数，正负1
 }LegParamS;
 // 完整单腿数据结构
 typedef struct _LegS
@@ -43,7 +44,9 @@ typedef struct _LegS
     double jacobiI[3][3];
 }LegS;
 
-void InitLeg(LegS* _leg, double* _links, double _ratio);
+// dir是指定腿的弯曲方向，1为正屈，-1为反屈
+void InitLeg(LegS* _leg, double* _links, double _ratio, int _dir);
+
 void LegJacobiCal(LegS* _leg, JointS* _joint);
 void LegInvJacobiCal(LegS* _leg, JointS* _joint);
 void LegFkCal(EndS* _end, JointS* _joint, LegParamS* _para);

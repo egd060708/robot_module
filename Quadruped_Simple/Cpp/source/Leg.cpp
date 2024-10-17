@@ -3,7 +3,7 @@
 #include <iostream>
 
 /* 初始化腿参数 */
-void InitLeg(LegS* _leg, double* _links, double _ratio)
+void InitLeg(LegS* _leg, double* _links, double _ratio, int _dir)
 {
 #if DOF==3
 	_leg->legPara.L[0] = _ratio * _links[0];
@@ -15,6 +15,7 @@ void InitLeg(LegS* _leg, double* _links, double _ratio)
 #endif
 
 	_leg->legPara.ratio = _ratio;
+	_leg->legPara.dir = _dir;
 }
 
 /* 计算雅可比矩阵 */
@@ -139,9 +140,18 @@ void LegIkCal(JointS* _joint, EndS* _end, LegParamS* _para)
 	double L = sqrt(x * x + z * z);
 	double theta = atan(x/z);
 	//std::cout << "theta: " << theta << std::endl;
-	double theta1 = theta + acos((L * L + _para->L[0] * _para->L[0] - _para->L[1] * _para->L[1]) / (2 * _para->L[0] * L));
-	double theta2 = acos((-L * L + _para->L[0] * _para->L[0] + _para->L[1] * _para->L[1]) / (2 * _para->L[0] * _para->L[1])) - 3.1415926;
-
+	double theta1 = 0;
+	double theta2 = 0;
+	if (_para->dir == 1)
+	{
+		theta1 = theta + acos((L * L + _para->L[0] * _para->L[0] - _para->L[1] * _para->L[1]) / (2 * _para->L[0] * L));
+		theta2 = acos((-L * L + _para->L[0] * _para->L[0] + _para->L[1] * _para->L[1]) / (2 * _para->L[0] * _para->L[1])) - 3.1415926;
+	}
+	else if (_para->dir == -1)
+	{
+		theta1 = theta - acos((L * L + _para->L[0] * _para->L[0] - _para->L[1] * _para->L[1]) / (2 * _para->L[0] * L));
+		theta2 = 3.1415926 - acos((-L * L + _para->L[0] * _para->L[0] + _para->L[1] * _para->L[1]) / (2 * _para->L[0] * _para->L[1]));
+	}
 	_joint->Angle[0] = theta1;
 	_joint->Angle[1] = theta2;
 #endif
