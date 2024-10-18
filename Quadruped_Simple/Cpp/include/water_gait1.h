@@ -1,12 +1,14 @@
 #pragma once
 #include <iostream>
 
-#define ROWS 162
-#define COLS 2
 
-extern double forelimb[ROWS][COLS];
-extern double forelimb_cont[ROWS][COLS];
-extern double hindlimb[ROWS][COLS];
-extern double hindlimb_cont[ROWS][COLS];
+#define WG_ROWS 162
+#define WG_COLS 2
 
-void getGait(double _dst[4][2], double _Ts, double _t, double _start_t);
+extern double forelimb[WG_ROWS][WG_COLS];
+extern double forelimb_cont[WG_ROWS][WG_COLS];
+extern double hindlimb[WG_ROWS][WG_COLS];
+extern double hindlimb_cont[WG_ROWS][WG_COLS];
+
+void getGait(double _dst[4][2], double _Ts, double _t, bool _is_gait);
+void slopeGait(double _dst[4][2], double _tar[4][2], double _cur[4][2], double slope);
