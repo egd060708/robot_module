@@ -66,18 +66,21 @@ namespace Quadruped
         bodyFrame currentBodyState;
 
         Leg* legs[4];
-        Vector3d leg2body;                     // 初始值代表左前腿向量
+        Vector3d leg2body[4];                  // 第一个值代表左前腿向量
         Matrix3d Rsb_c = Matrix3d::Identity(); // (当前)世界坐标系到机身坐标系的旋转矩阵映射
         Matrix4d Tsb_c = Matrix4d::Identity(); // (当前)世界坐标系到机身坐标系的齐次变换映射
         Matrix3d Rsb_t = Matrix3d::Identity(); // (目标)世界坐标系到机身坐标系的旋转矩阵映射
         Matrix4d Tsb_t = Matrix4d::Identity(); // (目标)世界坐标系到机身坐标系的齐次变换映射
 
-        Matrix3d M = Matrix3d::Zero();      // 机器人机体质量
-        Matrix3d Ib = Matrix3d::Zero();     // 机器人单刚体动力学机身转动惯量
-        Vector3d Pg = Vector3d::Zero();     // 机器人重心在机身坐标系下的位置（相当于{PbPg}）
+        double Mb[3] = {};      // 机器人机体质量(包括头部，中段和尾部)
+        Vector<double, 6> Ib[3] = {};    // 机器人单刚体动力学机身转动惯量
+        Vector3d Pb[3] = {};    // 机器人重心在机身坐标系下的位置
+        Matrix3d M = Matrix3d::Zero(); // 机器人总质量
+        Matrix3d I = Matrix3d::Zero(); // 机器人总惯量
+        Vector3d P = Vector3d::Zero(); // 机器人总质心位置
         Vector3d g = Vector3d(0, 0, -9.81); // 直接初始化重力加速度向量
-        double dt;                           // 控制周期
-        double _largeVariance = 100;              // 大的协方差
+        double dt;                          // 控制周期
+        double _largeVariance = 100;        // 大的协方差
         double _trust;                      // 对于腿部是否触地的置信度
 
         Eigen::Matrix<double, 6, 12> dynamicLeft = Eigen::Matrix<double, 6, 12>::Zero();
@@ -109,7 +112,7 @@ namespace Quadruped
         // 构造函数，绑定四个腿部状态描述类型
         Body(Leg* _legObj[4], double _dt);
         // 初始化函数，用于初始化物理参数
-        void initParams(Vector3d _leg2body, Vector3d _initRbLegXYPosition, Vector<double,9> _M, Vector<double,9> _Ib, Vector3d _Pg);
+        void initParams(Vector3d _leg2body, Vector3d _initRbLegXYPosition, double _Mb[3], Vector<double, 6> _Ib[3], Vector3d _Pb[3]);
         // 计算齐次变换矩阵(direction为1，则是当前；为-1，则是目标)
         void calTbs(int8_t direction);
         // 四足运动学：改变四条腿足端的位置从而改变机器人机身的位置和姿态
@@ -151,6 +154,8 @@ namespace Quadruped
         // 一些数学计算函数
         Eigen::Matrix3d quatToRot(const Vector4d& _quat);
         Eigen::Vector3d rotMatToRPY(const Matrix3d& R);
+        Eigen::Vector<double, 6> parallelAxis(const Vector3d& dstAxis, const Vector3d& oriAxis, const Vector<double, 6>& oriIm, const double oriM);// 平行轴定理
+        Eigen::Matrix3d aI2mI(const Vector<double, 6>& oriIm);
     };
 
     Body::Body(Leg* _legObj[4], double _dt)
@@ -244,19 +249,25 @@ namespace Quadruped
         estimator.setConv(_QInit, _RInit, _largeVariance * _P);// 初始化一个比较大的预测协方差矩阵
     }
 
-    void Body::initParams(Vector3d _leg2body, Vector3d _initRbLegXYPosition, Vector<double, 9> _M, Vector<double, 9> _Ib, Vector3d _Pg)
+    void Body::initParams(Vector3d _leg2body, Vector3d _initRbLegXYPosition, double _Mb[3], Vector<double, 6> _Ib[3], Vector3d _Pb[3])
     {
-        this->leg2body = _leg2body;
+        this->leg2body[LF] = _leg2body;
+        Vector3d tmp = _leg2body;
+        tmp(1) = tmp(1) * -1;
+        this->leg2body[RF] = tmp;
+        tmp(0) = tmp(0) * -1;
+        this->leg2body[RB] = tmp;
+        tmp(1) = tmp(1) * -1;
+        this->leg2body[LB] = tmp;
         this->initRbLegXYPosition = _initRbLegXYPosition;
       /*  this->M = Eigen::Map<Matrix3d>(_M.data(),3,3);
         this->Ib = Eigen::Map<Matrix3d>(_Ib.data(),3,3);*/
-        this->M(0, 0) = _M(0, 0);
-        this->M(1, 1) = _M(4, 0);
-        this->M(2, 2) = _M(8, 0);
-        this->Ib(0, 0) = _Ib(0, 0);
-        this->Ib(1, 1) = _Ib(4, 0);
-        this->Ib(2, 2) = _Ib(8, 0);
-        this->Pg = _Pg;
+        for (int i = 0; i < 3; i++)
+        {
+            this->Mb[i] = _Mb[i];
+            this->Ib[i] = _Ib[i];
+            this->Pb[i] = _Pb[i];
+        }
     }
 
     Matrix3d Body::v3_to_m3(Vector3d _v)
@@ -321,25 +332,17 @@ namespace Quadruped
     {
         if (direction == 1)
         {
-            currentBodyState.leg_b[LF].Position = legs[LF]->currentLeg.Position + this->leg2body;
-            Vector3d tmp = this->leg2body;
-            tmp(1) = tmp(1) * -1;
-            currentBodyState.leg_b[RF].Position = legs[RF]->currentLeg.Position + tmp;
-            tmp(0) = tmp(0) * -1;
-            currentBodyState.leg_b[RB].Position = legs[RB]->currentLeg.Position + tmp;
-            tmp(1) = tmp(1) * -1;
-            currentBodyState.leg_b[LB].Position = legs[LB]->currentLeg.Position + tmp;
+            currentBodyState.leg_b[LF].Position = legs[LF]->currentLeg.Position + this->leg2body[LF];
+            currentBodyState.leg_b[RF].Position = legs[RF]->currentLeg.Position + this->leg2body[RF];
+            currentBodyState.leg_b[RB].Position = legs[RB]->currentLeg.Position + this->leg2body[RB];
+            currentBodyState.leg_b[LB].Position = legs[LB]->currentLeg.Position + this->leg2body[LB];
         }
         else if (direction == -1)
         {
-            legs[LF]->targetLeg.Position = targetBodyState.leg_b[LF].Position - this->leg2body;
-            Vector3d tmp = this->leg2body;
-            tmp(1) = tmp(1) * -1;
-            legs[RF]->targetLeg.Position = targetBodyState.leg_b[RF].Position - tmp;
-            tmp(0) = tmp(0) * -1;
-            legs[RB]->targetLeg.Position = targetBodyState.leg_b[RB].Position - tmp;
-            tmp(1) = tmp(1) * -1;
-            legs[LB]->targetLeg.Position = targetBodyState.leg_b[LB].Position - tmp;
+            legs[LF]->targetLeg.Position = targetBodyState.leg_b[LF].Position - this->leg2body[LF];
+            legs[RF]->targetLeg.Position = targetBodyState.leg_b[RF].Position - this->leg2body[RF];
+            legs[RB]->targetLeg.Position = targetBodyState.leg_b[RB].Position - this->leg2body[RB];
+            legs[LB]->targetLeg.Position = targetBodyState.leg_b[LB].Position - this->leg2body[LB];
         }
     }
 
@@ -379,16 +382,50 @@ namespace Quadruped
 
     void Body::updateDynamic()
     {
+        // 首先计算整机重量惯量参数
+        double _M = 0;
+        Vector3d _P = Vector3d::Zero();
+        Vector<double, 6> _I = Vector<double, 6>::Zero();
+        for (int i = 0; i < 4; i++)
+        {
+            for (int j = 0; j < 4; j++)
+            {
+                _M += this->legs[i]->Mc[j];
+                _P += this->legs[i]->Mc[j] * (this->legs[i]->Pcl[j] + this->leg2body[i]);
+            }
+        }
+        for (int i = 0; i < 3; i++)
+        {
+            _M += this->Mb[i];
+            _P += this->Mb[i] * this->Pb[i];
+        }
+        _P = _P / _M;// 计算整机重心位置
+        for (int i = 0; i < 4; i++)
+        {
+            for (int j = 0; j < 4; j++)
+            {
+                _I += parallelAxis(_P, this->legs[i]->Pcl[j] + this->leg2body[i], this->legs[i]->Ic[j], this->legs[i]->Mc[j]);
+            }
+        }
+        for (int i = 0; i < 3; i++)
+        {
+            _I += parallelAxis(_P, Pb[i], Ib[i], Mb[i]);
+        }
+        // 得到整机刚体参数
+        this->P = _P;
+        this->M = _M * Matrix3d::Identity();
+        this->I = aI2mI(_I);
+
         for (int i = 0; i < 4; i++)
         {
             //dynamicLeft.block<3, 3>(0, i * 3) = Rsb_c;
-            Vector3d Pgi = Vector3d::Zero();
-            Pgi = Rsb_c * (currentBodyState.leg_b[i].Position - Pg);
-            //Pgi = (currentBodyState.leg_b[i].Position - Pg);
-            dynamicLeft.block<3, 3>(3, i * 3) = v3_to_m3(Pgi);
+            Vector3d Pbi = Vector3d::Zero();
+            Pbi = Rsb_c * (currentBodyState.leg_b[i].Position - P);
+            //Pbi = (currentBodyState.leg_b[i].Position - Pb);
+            dynamicLeft.block<3, 3>(3, i * 3) = v3_to_m3(Pbi);
         }
         dynamicRight.block<3, 3>(0, 0) = M;
-        dynamicRight.block<3, 3>(3, 3) = Rsb_c * Ib * Rsb_c.transpose();
+        dynamicRight.block<3, 3>(3, 3) = Rsb_c * I * Rsb_c.transpose();
         //dynamicRight.block<3, 3>(3, 3) = Ib;
     }
 
@@ -573,5 +610,33 @@ namespace Quadruped
         rpy(1) = asin(-R(2, 0));
         rpy(2) = atan2(R(1, 0), R(0, 0));
         return rpy;
+    }
+
+    Eigen::Vector<double, 6> Body::parallelAxis(const Vector3d& dstAxis, const Vector3d& oriAxis, const Vector<double, 6>& oriIm, const double oriM)
+    {
+        Vector<double, 6> dstIm;
+        Vector3d eAxis = oriAxis - dstAxis;
+        dstIm(0) = oriIm(0) + oriM * (pow(eAxis(1), 2) + pow(eAxis(2), 2));
+        dstIm(1) = oriIm(1) + oriM * (pow(eAxis(0), 2) + pow(eAxis(2), 2));
+        dstIm(2) = oriIm(2) + oriM * (pow(eAxis(0), 2) + pow(eAxis(1), 2));
+        dstIm(3) = oriIm(3) - oriM * eAxis(0) * eAxis(1);
+        dstIm(4) = oriIm(4) - oriM * eAxis(0) * eAxis(2);
+        dstIm(5) = oriIm(5) - oriM * eAxis(1) * eAxis(2);
+        return dstIm;
+    }
+
+    Eigen::Matrix3d Body::aI2mI(const Vector<double, 6>& oriIm)
+    {
+        Matrix3d mI;
+        mI(0, 0) = oriIm(0);
+        mI(1, 1) = oriIm(1);
+        mI(2, 2) = oriIm(2);
+        mI(0, 1) = oriIm(3);
+        mI(1, 0) = oriIm(3);
+        mI(0, 2) = oriIm(4);
+        mI(2, 0) = oriIm(4);
+        mI(1, 2) = oriIm(5);
+        mI(2, 1) = oriIm(5);
+        return mI;
     }
 }

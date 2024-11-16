@@ -21,6 +21,9 @@ namespace Quadruped
         Vector3d Angle;
         Vector3d Velocity;
         Vector3d Torque;
+        double Foot_Angle;
+        double Foot_Velocity;
+        double Foot_Torque;
     } JointS;
 
     // 单腿类型
@@ -32,11 +35,60 @@ namespace Quadruped
         JointS targetJoint;
         JointS currentJoint;
         Matrix3d jacobi;
-        double L1 = 0, L2 = 0, L3 = 0;
-        double ratio = 0; // 该参数用于分辨极性，为正负1
+        double L1, L2, L3, L4a, L4b, L4r;// 前三条连杆以及最后两个足端执行器参数
+        Vector3d Pcj[4];// 所有连杆的质心相对其关节位置
+        Vector3d Pcl[4];// 所有连杆的质心相对单腿系的位置
+        Vector<double, 6> Ic[4];// 所有连杆质心的惯性张量矩阵简化形式
+        double Mc[4];// 所有连杆质量
 
     public:
-        Leg(double _l1, double _l2, double _l3, double ratio) : L1(ratio* _l1), L2(_l2), L3(_l3) {}
+        Leg(double _l[6], Vector3d _pcj[4], double _mc[4], Vector<double, 6> _ic[4], int idx) {
+            if (idx == 0 || idx == 2)
+            {
+                L1 = _l[0];
+                L4a = _l[3];
+            }
+            else
+            {
+                L1 = -_l[0];
+                L4a = -_l[3];
+            }
+            L2 = _l[1];
+            L3 = _l[2];
+            L4b = _l[4];
+            L4r = _l[5];
+            for (int i = 0; i < 4; i++)
+            {
+                switch (idx) 
+                {
+                    case 0:
+                        Pcj[i](0) = _pcj[i](0);
+                        Pcj[i](1) = _pcj[i](1);
+                        Pcj[i](2) = _pcj[i](2);
+                        break;
+                    case 1:
+                        Pcj[i](0) = _pcj[i](0);
+                        Pcj[i](1) = -_pcj[i](1);
+                        Pcj[i](2) = _pcj[i](2);
+                        break;
+                    case 2:
+                        Pcj[i](0) = -_pcj[i](0);
+                        Pcj[i](1) = _pcj[i](1);
+                        Pcj[i](2) = _pcj[i](2);
+                        break;
+                    case 3:
+                        Pcj[i](0) = -_pcj[i](0);
+                        Pcj[i](1) = -_pcj[i](1);
+                        Pcj[i](2) = _pcj[i](2);
+                        break;
+                    default:
+                        break;
+                }
+                this->Mc[i] = _mc[i];
+                this->Ic[i] = _ic[i];
+            }
+            
+        }
         void updateJointAng(Vector3d _jAngle);          // 更新各关节观测角度
         void updateJointVel(Vector3d _jVel);            // 更新关节观测角速度
         void updateJointTau(Vector3d _jTorque);         // 更新关节观测力矩
@@ -46,8 +98,9 @@ namespace Quadruped
         void setTargetLegVelocity(Vector3d _lVelocity); // 更新腿部末端速度目标值
         void setTargetLegForce(Vector3d _lForce);       // 更新腿部末端力目标值
         void legIK_Cal();                               // 包括由末端目标位姿映射关节目标角度，由末端目标速度映射到关节目标速度，由末端目标力映射到当前关节力矩
+        void legIP_Cal();                               // 腿部连杆惯量动态位置计算(从初始位型到当前位型)
 
-        const LegS& getLegCurrent(); // 获取单腿模型参数观测值
+        const LegS& getLegCurrent();                    // 获取单腿模型参数观测值
     };
 
     void Leg::updateJointAng(Vector3d _jAngle)
@@ -135,6 +188,28 @@ namespace Quadruped
         targetJoint.Angle(0) = theta1;
         targetJoint.Angle(1) = theta2;
         targetJoint.Angle(2) = theta3;
+    }
+
+    void Leg::legIP_Cal()
+    {
+        AngleAxisd rhip(currentJoint.Angle(0), Vector3d::UnitX());
+        AngleAxisd rthigh(currentJoint.Angle(1), Vector3d::UnitY());
+        AngleAxisd rcalf(currentJoint.Angle(2), Vector3d::UnitY());
+        Vector3d jointsP[4];
+        jointsP[0].setZero();
+        jointsP[1](0) = 0;
+        jointsP[1](1) = L1 * cos(currentJoint.Angle(0));
+        jointsP[1](2) = L1 * sin(currentJoint.Angle(0));
+        jointsP[2](0) = jointsP[1](0) - L2 * sin(currentJoint.Angle(1));
+        jointsP[2](1) = jointsP[1](1) + L2 * sin(currentJoint.Angle(0)) * cos(currentJoint.Angle(1));
+        jointsP[2](2) = jointsP[1](2) - L2 * cos(currentJoint.Angle(0)) * cos(currentJoint.Angle(1));
+        jointsP[3](0) = jointsP[2](0) - L3 * sin(currentJoint.Angle(1) + currentJoint.Angle(2));
+        jointsP[3](1) = jointsP[2](1) + L3 * sin(currentJoint.Angle(0)) * cos(currentJoint.Angle(1) + currentJoint.Angle(2));
+        jointsP[3](2) = jointsP[2](2) - L3 * cos(currentJoint.Angle(0)) * cos(currentJoint.Angle(1) + currentJoint.Angle(2));
+        this->Pcl[0] = rhip.toRotationMatrix() * Pcj[0] + jointsP[0];
+        this->Pcl[1] = (rhip * rthigh).toRotationMatrix() * Pcj[1] + jointsP[1];
+        this->Pcl[2] = (rhip * rthigh * rcalf).toRotationMatrix() * Pcj[2] + jointsP[2];
+        this->Pcl[3] = (rhip * rthigh * rcalf).toRotationMatrix() * Pcj[3] + jointsP[3];
     }
 
     const LegS& Leg::getLegCurrent()

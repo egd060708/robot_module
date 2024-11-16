@@ -123,6 +123,7 @@ namespace Quadruped
     {
         legObject->jacobi = legObject->legJacobi_Cal(legObject->currentJoint);
         legObject->legFK_Cal();
+        legObject->legIP_Cal();
         legObject->legIK_Cal();
     }
 
