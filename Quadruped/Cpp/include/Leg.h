@@ -35,28 +35,30 @@ namespace Quadruped
         JointS targetJoint;
         JointS currentJoint;
         Matrix3d jacobi;
-        double L1, L2, L3, L4a, L4b, L4r;// 前三条连杆以及最后两个足端执行器参数
+        double L1, L2, L2b, L3, L3b, L4, L4b;// 前三条连杆以及最后两个足端执行器参数
         Vector3d Pcj[4];// 所有连杆的质心相对其关节位置
         Vector3d Pcl[4];// 所有连杆的质心相对单腿系的位置
         Vector<double, 6> Ic[4];// 所有连杆质心的惯性张量矩阵简化形式
         double Mc[4];// 所有连杆质量
 
     public:
-        Leg(double _l[6], Vector3d _pcj[4], double _mc[4], Vector<double, 6> _ic[4], int idx) {
+        Leg(double _l[7], Vector3d _pcj[4], double _mc[4], Vector<double, 6> _ic[4], int idx) {
             if (idx == 0 || idx == 2)
             {
                 L1 = _l[0];
-                L4a = _l[3];
+                L2b = _l[2];
+                L3b = _l[4];
             }
             else
             {
                 L1 = -_l[0];
-                L4a = -_l[3];
+                L2b = -_l[2];
+                L3b = -_l[4];
             }
             L2 = _l[1];
-            L3 = _l[2];
-            L4b = _l[4];
-            L4r = _l[5];
+            L3 = _l[3];
+            L4 = _l[5];
+            L4b = _l[6];
             for (int i = 0; i < 4; i++)
             {
                 switch (idx) 
@@ -131,10 +133,10 @@ namespace Quadruped
         J(0, 0) = 0;
         J(0, 1) = -L2 * c2 - L3 * c23;
         J(0, 2) = -L3 * c23;
-        J(1, 0) = -L1 * s1 + L2 * c1 * c2 + L3 * c1 * c23;
+        J(1, 0) = -L1 * s1 + L2 * c1 * c2 + L3 * c1 * c23 - L2b * s1 - L3b * s1 + L4 * c1;
         J(1, 1) = -L2 * s1 * s2 - L3 * s1 * s23;
         J(1, 2) = -L3 * s1 * s23;
-        J(2, 0) = L1 * c1 + L2 * s1 * c2 + L3 * s1 * c23;
+        J(2, 0) = L1 * c1 + L2 * s1 * c2 + L3 * s1 * c23 + L2b * c1 + L3b * c1 + L4 * s1;
         J(2, 1) = L2 * c1 * s2 + L3 * c1 * s23;
         J(2, 2) = L3 * c1 * s23;
         return J;
@@ -144,8 +146,8 @@ namespace Quadruped
     {
         // 正运动学更新当前末端位置
         currentLeg.Position(0) = -L2 * sin(currentJoint.Angle(1)) - L3 * sin(currentJoint.Angle(1) + currentJoint.Angle(2));
-        currentLeg.Position(1) = L1 * cos(currentJoint.Angle(0)) + L2 * sin(currentJoint.Angle(0)) * cos(currentJoint.Angle(1)) + L3 * sin(currentJoint.Angle(0)) * cos(currentJoint.Angle(1) + currentJoint.Angle(2));
-        currentLeg.Position(2) = L1 * sin(currentJoint.Angle(0)) - L2 * cos(currentJoint.Angle(0)) * cos(currentJoint.Angle(1)) - L3 * cos(currentJoint.Angle(0)) * cos(currentJoint.Angle(1) + currentJoint.Angle(2));
+        currentLeg.Position(1) = L1 * cos(currentJoint.Angle(0)) + L2 * sin(currentJoint.Angle(0)) * cos(currentJoint.Angle(1)) + L2b * cos(currentJoint.Angle(0)) + L3 * sin(currentJoint.Angle(0)) * cos(currentJoint.Angle(1) + currentJoint.Angle(2)) + L3b * cos(currentJoint.Angle(0)) + L4 * sin(currentJoint.Angle(0));
+        currentLeg.Position(2) = L1 * sin(currentJoint.Angle(0)) - L2 * cos(currentJoint.Angle(0)) * cos(currentJoint.Angle(1)) + L2b * sin(currentJoint.Angle(0)) - L3 * cos(currentJoint.Angle(0)) * cos(currentJoint.Angle(1) + currentJoint.Angle(2)) + L3b * sin(currentJoint.Angle(0)) - L4 * cos(currentJoint.Angle(0)) - L4b;
         // 雅可比矩阵完成从关节速度到末端速度的映射
         currentLeg.Velocity = jacobi * currentJoint.Velocity;
         // 雅可比矩阵完成从当前关节力矩到当前末端虚拟力的映射
@@ -172,8 +174,8 @@ namespace Quadruped
     {
         // 解析几何法逆运动学
         double x = targetLeg.Position(0);
-        double y = targetLeg.Position(1);
-        double z = targetLeg.Position(2);
+        double y = targetLeg.Position(1) - L2b * cos(currentJoint.Angle(0)) - L3b * cos(currentJoint.Angle(0)) - L4 * sin(currentJoint.Angle(0));
+        double z = targetLeg.Position(2) - L2b * sin(currentJoint.Angle(0)) - L3b * sin(currentJoint.Angle(0)) + L4 * cos(currentJoint.Angle(0)) + L4b;
 
         double L = sqrt(y * y + z * z - L1 * L1);// 首先是二三级连杆投影到yz平面的映射长度
         double theta1 = atan2((L1 * z + L * y), -L * z + L1 * y);
@@ -201,11 +203,11 @@ namespace Quadruped
         jointsP[1](1) = L1 * cos(currentJoint.Angle(0));
         jointsP[1](2) = L1 * sin(currentJoint.Angle(0));
         jointsP[2](0) = jointsP[1](0) - L2 * sin(currentJoint.Angle(1));
-        jointsP[2](1) = jointsP[1](1) + L2 * sin(currentJoint.Angle(0)) * cos(currentJoint.Angle(1));
-        jointsP[2](2) = jointsP[1](2) - L2 * cos(currentJoint.Angle(0)) * cos(currentJoint.Angle(1));
+        jointsP[2](1) = jointsP[1](1) + L2 * sin(currentJoint.Angle(0)) * cos(currentJoint.Angle(1)) + L2b * cos(currentJoint.Angle(0));
+        jointsP[2](2) = jointsP[1](2) - L2 * cos(currentJoint.Angle(0)) * cos(currentJoint.Angle(1)) + L2b * sin(currentJoint.Angle(0));
         jointsP[3](0) = jointsP[2](0) - L3 * sin(currentJoint.Angle(1) + currentJoint.Angle(2));
-        jointsP[3](1) = jointsP[2](1) + L3 * sin(currentJoint.Angle(0)) * cos(currentJoint.Angle(1) + currentJoint.Angle(2));
-        jointsP[3](2) = jointsP[2](2) - L3 * cos(currentJoint.Angle(0)) * cos(currentJoint.Angle(1) + currentJoint.Angle(2));
+        jointsP[3](1) = jointsP[2](1) + L3 * sin(currentJoint.Angle(0)) * cos(currentJoint.Angle(1) + currentJoint.Angle(2)) + L3b * cos(currentJoint.Angle(0));
+        jointsP[3](2) = jointsP[2](2) - L3 * cos(currentJoint.Angle(0)) * cos(currentJoint.Angle(1) + currentJoint.Angle(2)) + L3b * sin(currentJoint.Angle(0));
         this->Pcl[0] = rhip.toRotationMatrix() * Pcj[0] + jointsP[0];
         this->Pcl[1] = (rhip * rthigh).toRotationMatrix() * Pcj[1] + jointsP[1];
         this->Pcl[2] = (rhip * rthigh * rcalf).toRotationMatrix() * Pcj[2] + jointsP[2];

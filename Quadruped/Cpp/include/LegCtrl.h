@@ -9,16 +9,13 @@ namespace Quadruped
 
     class LegCtrl
     {
-    private:
+    public:
         Leg* legObject;
         PIDmethod jPid[3];          // 用于关节位控的控制器
         PIDmethod jPid_pv[6];       // 用于末端位置和速度的关节位控制器
         PIDmethod lPid[3];          // 用于末端力控的控制器
         PIDmethod lPid_pv[6];       // 用于末端位置和速度的力控制器
-        Vector3d jPidParams[3];     // 关节位控pid参数(一组三个参数分别是kp,kd,o_max)
-        Vector2d jPid_pvParams[6];  // 关节位置速度位控参数(p_kp,v_kp,o_max)
-        Vector3d lPidParams[3];     // 末端力控pid参数(一组三个参数分别是kp,kd,o_max)
-        Vector2d lPid_pvParams[6];  // 关节位置速度力控参数(p_kp,v_kp,o_max)
+        
         void loadPidParams(PIDmethod _pidObj[3], Vector3d _pidParam[3]);
         void loadPid_pvParams(PIDmethod _pidObj[6], Vector2d _pidParam[6]);
     public:
@@ -56,6 +53,11 @@ namespace Quadruped
         {
             p.PID_Init(Common, static_cast<double>(0.001 * timeStep));
         }
+
+        Vector3d jPidParams[3];     // 关节位控pid参数(一组三个参数分别是kp,kd,o_max)
+        Vector2d jPid_pvParams[6];  // 关节位置速度位控参数(p_kp,v_kp,o_max)
+        Vector3d lPidParams[3];     // 末端力控pid参数(一组三个参数分别是kp,kd,o_max)
+        Vector2d lPid_pvParams[6];  // 关节位置速度力控参数(p_kp,v_kp,o_max)
 
         lPidParams[0] << 20, -0.1, 200;
         lPidParams[1] << 20, -0.1, 200;
