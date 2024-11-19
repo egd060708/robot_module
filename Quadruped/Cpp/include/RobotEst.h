@@ -8,15 +8,28 @@ protected:
 	Eigen::MatrixXd _B;
 	Eigen::MatrixXd _R;
 	Eigen::MatrixXd _RInit;
+	Eigen::VectorXd _Rdig;
 	Eigen::MatrixXd _Q;
 	Eigen::MatrixXd _QInit;
 	Eigen::VectorXd _Qdig;
 	Eigen::MatrixXd _Cu;
 	Eigen::MatrixXd _P;
+
+	Eigen::Matrix4d _Tsb;
 public:
 	Eigen::VectorXd estimatorOut;
 	Eigen::VectorXd estimatorState;
 	inline virtual void estimatorRun(const Eigen::MatrixXd& _u,const Eigen::MatrixXd& _y,const Eigen::Vector4i& _contact,const Eigen::Vector4d& _phase) = 0;
+	inline virtual Eigen::Vector3d getEstFeetPosS(int id) = 0;
+	inline virtual Eigen::Vector3d getEstFeetVelS(int id) = 0;
+	inline virtual Eigen::Matrix<double, 3, 4> getEstFeetPosS() = 0;
+	inline virtual Eigen::Matrix<double, 3, 4> getEstFeetVelS() = 0;
+	inline virtual Eigen::Vector3d getEstBodyPosS() = 0;
+	inline virtual Eigen::Vector3d getEstBodyVelS() = 0;
+	inline void updateTsb(const Eigen::MatrixXd& _T)
+	{
+		_Tsb = _T;
+	}
 };
 
 class QpEst : public EstBase {
@@ -50,6 +63,7 @@ public:
 		_B.resize(18, 3);
 		_R.resize(28, 28);
 		_RInit.resize(28, 28);
+		_Rdig.resize(28);
 		_Q.resize(18, 18);
 		_QInit.resize(18, 18);
 		_Qdig.resize(18);
@@ -67,7 +81,7 @@ public:
 		_QInit.setZero();
 		_Qdig.setZero();
 		_Cu.setZero();
-		_P.setZero();
+		_P.setIdentity();
 		estimatorOut.setZero();
 		estimatorState.setZero();
 
@@ -143,7 +157,7 @@ public:
 			-147.211, 58.082, 302.120;
 		// 过程协方差
 		_QInit = _Qdig.asDiagonal();
-		_QInit += _B * _Cu * _B.transpose();
+		_QInit += _B * _Cu * _B.transpose();// 把加速度计的协方差矩阵嵌入过程协方差矩阵中
 
 		estimator.setConv(_QInit, _RInit, _largeVariance * _P);// 初始化一个比较大的预测协方差矩阵
 	}
@@ -176,11 +190,207 @@ public:
 		// 估计状态
 		estimatorState = estimator.getState();
 	}
+
+	inline Eigen::Vector3d getEstFeetPosS(int id) {
+		Eigen::Vector3d out;
+		out = estimatorState.block<3, 1>(6 + 3 * id, 0);
+		return out;
+	}
+
+	inline Eigen::Vector3d getEstFeetVelS(int id) {
+		Eigen::Vector3d out;
+		out = estimatorOut.block<3, 1>(12 + 3 * id, 0);
+		return out;
+	}
+
+	inline Eigen::Matrix<double, 3, 4> getEstFeetPosS() {
+		Eigen::Matrix<double, 3, 4> out;
+		for (int i = 0; i < 4; i++)
+		{
+			out.block<3, 1>(0, i) = estimatorState.block<3, 1>(6 + 3 * i, 0);
+		}
+		return out;
+	}
+
+	inline Eigen::Matrix<double, 3, 4> getEstFeetVelS() {
+		Eigen::Matrix<double, 3, 4> out;
+		for (int i = 0; i < 4; i++)
+		{
+			out.block<3, 1>(0, i) = estimatorOut.block<3, 1>(12 + 3 * i, 0);
+		}
+		return out;
+	}
+
+	inline virtual Eigen::Vector3d getEstBodyPosS()
+	{
+		return estimatorState.block<3, 1>(0, 0);
+	}
+	
+	inline virtual Eigen::Vector3d getEstBodyVelS()
+	{
+		return estimatorState.block<3, 1>(3, 0);
+	}
 };
 
 class QpwEst : public EstBase {
 private:
-
+	kelmanFilter<24, 3, 36> estimator;
+	double _largeVariance = 100;// 大的协方差
+	double _ctTrust = 0;// 对于腿部是否触地的置信度
+	double _czTrust = 0;// 对于腿部参考高度的置信度
+	double wp=0.0003, wpd=0.0003, wpw=0.0003, wpwd=0.0003, wpcp=0.01;// 过程协方差参数
+	double vpcp=0.01, vpcpkd=0.01, vpcpwd=0.01;// 测量协方差参数
+	/* 非线性函数 */
+	double sigmoid(double _x) {
+		return 1 / (1 + exp(-_x));
+	}
+	/* 触地状态信任窗口函数 */
+	double ctWin(double _phase, double _w=0.1)
+	{
+		return 0.5 * (sigmoid(4 * _phase / _w - 2) + sigmoid(4 * (1 - _phase) / _w - 2));
+	}
+	/* 高度设定信任窗口函数 */
+	double czWin(double _z, double _k1 = 50, double _k2 = 10)
+	{
+		if (_z > 0)
+		{
+			return exp(-_k1 * _z * _z);
+		}
+		else
+		{
+			return exp(-_k2 * _z * _z);
+		}
+	}
 public:
+	QpwEst(double _dt) {
+		_H.resize(36, 24);
+		_A.resize(24, 24);
+		_B.resize(24, 3);
+		_R.resize(36, 36);
+		_RInit.resize(36, 36);
+		_Rdig.resize(36);
+		_Q.resize(24, 24);
+		_QInit.resize(24, 24);
+		_Qdig.resize(24);
+		_Cu.resize(3, 3);
+		_P.resize(24, 24);
+		estimatorOut.resize(36);
+		estimatorState.resize(24);
+
+		_H.setZero();
+		_A.setZero();
+		_B.setZero();
+		_R.setZero();
+		_RInit.setZero();
+		_Q.setZero();
+		_QInit.setZero();
+		_Qdig.setZero();
+		_Cu.setZero();
+		_P.setIdentity();
+		estimatorOut.setZero();
+		estimatorState.setZero();
+
+		// 初始化观测器参数
+		_A.block(0, 3, 3, 3) = Eigen::Matrix3d::Identity();
+		_A.block(6, 9, 3, 3) = Eigen::Matrix3d::Identity();
+		_B.block(3, 0, 3, 3) = Eigen::Matrix3d::Identity();
+		_H.block(0, 0, 3, 3) = Eigen::Matrix3d::Identity();
+		_H.block(0, 6, 3, 3) = -Eigen::Matrix3d::Identity();
+		_H.block(12, 3, 3, 3) = Eigen::Matrix3d::Identity();
+		_H.block(12, 9, 3, 3) = -Eigen::Matrix3d::Identity();
+		_H.block(24, 9, 3, 3) = Eigen::Matrix3d::Identity();
+		_H.block(0, 12, 12, 12) = -Eigen::Matrix<double, 12, 12>::Identity();
+		estimator.setFunc(_A, _B, _H, _dt);
+
+		_Qdig.block(0, 0, 3, 1).setConstant(wp);
+		_Qdig.block(3, 0, 3, 1).setConstant(wpd);
+		_Qdig.block(6, 0, 3, 1).setConstant(wpw);
+		_Qdig.block(9, 0, 3, 1).setConstant(wpwd);
+		_Qdig.block(12, 0, 12, 1).setConstant(wpcp*(1 + _largeVariance));
+		_Rdig.block(0, 0, 12, 1).setConstant(vpcp);
+		_Rdig.block(12, 0, 12, 1).setConstant(vpcpkd);
+		_Rdig.block(24, 0, 12, 1).setConstant(vpcpwd);
+
+		_QInit = _Qdig.asDiagonal();
+		_RInit = _Rdig.asDiagonal();
+
+		estimator.setConv(_QInit, _RInit, _largeVariance * _P);// 初始化一个比较大的预测协方差矩阵
+	}
+
+	inline void estimatorRun(const Eigen::MatrixXd& _u, const Eigen::MatrixXd& _y, const Eigen::Vector4i& _contact, const Eigen::Vector4d& _phase) {
+		_R = _RInit;
+		_Q = _QInit;
+		for (int i = 0; i < 4; i++)
+		{
+			if (_contact(i) == 0)
+			{
+				_Q.block(12 + 3 * i, 12 + 3 * i, 3, 3) = _largeVariance * Eigen::Matrix<double, 3, 3>::Identity();
+			}
+			else
+			{
+				_ctTrust = ctWin(_phase(i), 0.2);// 针对触地相位做信任度估计
+				//_czTrust = czWin(_y(3 * i + 2));// 针对当前设置高度做信任度估计
+				_czTrust = czWin(0);// 针对当前设置高度做信任度估计(暂且设置为0)
+				Eigen::Vector3d _trustM(1, 1, _czTrust);// 获取组合置信度
+				_trustM = _ctTrust * _trustM;
+				_trustM = Eigen::Vector3d::Ones() + _largeVariance * (Eigen::Vector3d::Ones() - _trustM);
+				_Q.block(12 + 3 * i, 12 + 3 * i, 3, 3) = _trustM.asDiagonal() * _QInit.block(12 + 3 * i, 12 + 3 * i, 3, 3);			}
+		}
+		// 更新协方差矩阵
+		estimator.updateConv(_Q, _R);
+		// 卡尔曼滤波执行
+		estimator.f(_u, _y);
+		// 估计输出
+		estimatorOut = estimator.getOut();
+		// 估计状态
+		estimatorState = estimator.getState();
+	}
+
+	inline Eigen::Vector3d getEstFeetPosS(int id) {
+		//Eigen::Vector3d out;
+		Eigen::Vector4d trans(0,0,0,1);
+		trans.block(0, 0, 3, 1) = estimatorOut.block<3, 1>(3 * id, 0);
+		trans = this->_Tsb * trans;
+		//out = trans.block(0, 0, 3, 1);
+		return trans.block(0, 0, 3, 1);
+	}
+
+	inline Eigen::Vector3d getEstFeetVelS(int id) {
+		Eigen::Vector3d out;
+		out = this->_Tsb.block(0,0,3,3) * (estimatorOut.block<3, 1>(12 + 3 * id, 0)+estimatorOut.block<3,1>(24 + 3 * id, 0));
+		return out;
+	}
+
+	inline Eigen::Matrix<double, 3, 4> getEstFeetPosS() {
+		Eigen::Matrix<double, 3, 4> out;
+		
+		for (int i = 0; i < 4; i++)
+		{
+			Eigen::Vector4d trans(0,0,0,1);
+			trans.block(0, 0, 3, 1) = estimatorOut.block<3, 1>(3 * i, 0);
+			trans = this->_Tsb * trans;
+			out.block<3, 1>(0, i) = trans.block(0,0,3,1);
+		}
+		return out;
+	}
+
+	inline Eigen::Matrix<double, 3, 4> getEstFeetVelS() {
+		Eigen::Matrix<double, 3, 4> out;
+		for (int i = 0; i < 4; i++)
+		{
+			out.block<3, 1>(0, i) = this->_Tsb.block(0, 0, 3, 3) * (estimatorOut.block<3, 1>(12 + 3 * i, 0) + estimatorOut.block<3, 1>(24 + 3 * i, 0));
+		}
+		return out;
+	}
+
+	inline virtual Eigen::Vector3d getEstBodyPosS()
+	{
+		return estimatorState.block<3, 1>(0, 0);
+	}
+
+	inline virtual Eigen::Vector3d getEstBodyVelS()
+	{
+		return estimatorState.block<3, 1>(3, 0);
+	}
 
 };

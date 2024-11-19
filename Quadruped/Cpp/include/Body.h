@@ -82,8 +82,6 @@ namespace Quadruped
         Vector3d P = Vector3d::Zero(); // 机器人总质心位置
         Vector3d g = Vector3d(0, 0, -9.81); // 直接初始化重力加速度向量
         double dt;                          // 控制周期
-        double _largeVariance = 100;        // 大的协方差
-        double _trust;                      // 对于腿部是否触地的置信度
 
         Eigen::Matrix<double, 6, 12> dynamicLeft = Eigen::Matrix<double, 6, 12>::Zero();
         Eigen::Matrix<double, 6, 6> dynamicRight = Eigen::Matrix<double, 6, 6>::Zero();
@@ -92,22 +90,6 @@ namespace Quadruped
 
         // 将向量转换成角对称矩阵
         Matrix3d v3_to_m3(Vector3d _v);
-
-        //// 引入状态估计器
-        //kelmanFilter<18, 3, 28> estimator;
-        //Eigen::Matrix<double, 28, 18> _H = Eigen::Matrix<double, 28, 18>::Zero();
-        //Eigen::Matrix<double, 18, 18> _A = Eigen::Matrix<double, 18, 18>::Zero();
-        //Eigen::Matrix<double, 18, 3> _B = Eigen::Matrix<double, 18, 3>::Zero();
-        //Eigen::Matrix<double, 28, 28> _R = Eigen::Matrix<double, 28, 28>::Zero();
-        //Eigen::Matrix<double, 28, 28> _RInit = Eigen::Matrix<double, 28, 28>::Zero();
-        //Eigen::Matrix<double, 18, 18> _Q = Eigen::Matrix<double, 18, 18>::Zero();
-        //Eigen::Matrix<double, 18, 18> _QInit = Eigen::Matrix<double, 18, 18>::Zero();
-        //Eigen::Vector<double, 18> _Qdig = Eigen::Vector<double, 18>::Zero();
-        //Eigen::Matrix<double, 3, 3> _Cu = Eigen::Matrix<double, 3, 3>::Zero();
-        //Eigen::Matrix<double, 18, 18> _P = Eigen::Matrix<double, 18, 18>::Identity();
-
-        //Eigen::Vector<double, 28> estimatorOut = Eigen::Vector<double, 28>::Zero();
-        //Eigen::Vector<double, 18> estimatorState = Eigen::Vector<double, 18>::Zero();
 
 
     public:
@@ -141,13 +123,7 @@ namespace Quadruped
         // 更新目标四足速度
         void updateTargetFootVel(Eigen::Matrix<double, 3, 4> _vel);
 
-        // 状态估计运行
-        //void estimatorRun(Vector4i _contact, Vector4d _phase);
-        // 获取估计四足点位
-        Eigen::Matrix<double, 3, 4> getEstFeetPos();
-        Eigen::Vector3d getEstFeetPos(int id);
-        Eigen::Matrix<double, 3, 4> getEstFeetVel();
-        Eigen::Vector3d getEstFeetVel(int id);
+        // 获取运动学四足点位
         Eigen::Matrix<double, 3, 4> getFKFeetPos();
         Eigen::Vector3d getFKFeetPos(int id);
         Eigen::Matrix<double, 3, 4> getFKFeetVel();
@@ -174,82 +150,6 @@ namespace Quadruped
         dynamicLeft.block<3, 3>(0, 3) = Ident;
         dynamicLeft.block<3, 3>(0, 6) = Ident;
         dynamicLeft.block<3, 3>(0, 9) = Ident;
-
-        //// 初始化状态估计器
-        //// 状态转移矩阵
-        //_A.block(0, 3, 3, 3) = Eigen::Matrix<double, 3, 3>::Identity();
-        //// 输入矩阵
-        //_B.block(3, 0, 3, 3) = Eigen::Matrix<double, 3, 3>::Identity();
-        //// 输出矩阵
-        //_H.block(0, 0, 3, 3) = -Eigen::Matrix<double, 3, 3>::Identity();
-        //_H.block(3, 0, 3, 3) = -Eigen::Matrix<double, 3, 3>::Identity();
-        //_H.block(6, 0, 3, 3) = -Eigen::Matrix<double, 3, 3>::Identity();
-        //_H.block(9, 0, 3, 3) = -Eigen::Matrix<double, 3, 3>::Identity();
-        //_H.block(12, 3, 3, 3) = -Eigen::Matrix<double, 3, 3>::Identity();
-        //_H.block(15, 3, 3, 3) = -Eigen::Matrix<double, 3, 3>::Identity();
-        //_H.block(18, 3, 3, 3) = -Eigen::Matrix<double, 3, 3>::Identity();
-        //_H.block(21, 3, 3, 3) = -Eigen::Matrix<double, 3, 3>::Identity();
-        //_H.block(0, 6, 12, 12) = Eigen::Matrix<double, 12, 12>::Identity();
-        //_H(24, 8) = 1;
-        //_H(25, 11) = 1;
-        //_H(26, 14) = 1;
-        //_H(27, 17) = 1;
-        //// 初始化状态空间方程
-        //estimator.setFunc(_A, _B, _H, dt);
-        //// 测量噪声协方差
-        //_RInit << 0.008, 0.012, -0.000, -0.009, 0.012, 0.000, 0.009, -0.009, -0.000, -0.009, -0.009, 0.000, -0.000, 0.000, -0.000, 0.000, -0.000, -0.001, -0.002, 0.000, -0.000, -0.003, -0.000, -0.001, 0.000, 0.000, 0.000, 0.000,
-        //    0.012, 0.019, -0.001, -0.014, 0.018, -0.000, 0.014, -0.013, -0.000, -0.014, -0.014, 0.001, -0.001, 0.001, -0.001, 0.000, 0.000, -0.001, -0.003, 0.000, -0.001, -0.004, -0.000, -0.001, 0.000, 0.000, 0.000, 0.000,
-        //    -0.000, -0.001, 0.001, 0.001, -0.001, 0.000, -0.000, 0.000, -0.000, 0.001, 0.000, -0.000, 0.000, -0.000, 0.000, 0.000, -0.000, -0.000, 0.000, -0.000, -0.000, -0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000,
-        //    -0.009, -0.014, 0.001, 0.010, -0.013, 0.000, -0.010, 0.010, 0.000, 0.010, 0.010, -0.000, 0.001, 0.000, 0.000, 0.001, -0.000, 0.001, 0.002, -0.000, 0.000, 0.003, 0.000, 0.001, 0.000, 0.000, 0.000, 0.000,
-        //    0.012, 0.018, -0.001, -0.013, 0.018, -0.000, 0.013, -0.013, -0.000, -0.013, -0.013, 0.001, -0.001, 0.000, -0.001, 0.000, 0.001, -0.001, -0.003, 0.000, -0.001, -0.004, -0.000, -0.001, 0.000, 0.000, 0.000, 0.000,
-        //    0.000, -0.000, 0.000, 0.000, -0.000, 0.001, 0.000, 0.000, -0.000, 0.000, 0.000, -0.000, -0.000, 0.000, -0.000, 0.000, 0.000, 0.000, -0.000, -0.000, -0.000, -0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000,
-        //    0.009, 0.014, -0.000, -0.010, 0.013, 0.000, 0.010, -0.010, -0.000, -0.010, -0.010, 0.000, -0.001, 0.000, -0.001, 0.000, -0.000, -0.001, -0.001, 0.000, -0.000, -0.003, -0.000, -0.001, 0.000, 0.000, 0.000, 0.000,
-        //    -0.009, -0.013, 0.000, 0.010, -0.013, 0.000, -0.010, 0.009, 0.000, 0.010, 0.010, -0.000, 0.001, -0.000, 0.000, -0.000, 0.000, 0.001, 0.002, 0.000, 0.000, 0.003, 0.000, 0.001, 0.000, 0.000, 0.000, 0.000,
-        //    -0.000, -0.000, -0.000, 0.000, -0.000, -0.000, -0.000, 0.000, 0.001, 0.000, 0.000, 0.000, 0.000, -0.000, 0.000, -0.000, 0.000, -0.000, 0.000, -0.000, 0.000, 0.000, -0.000, -0.000, 0.000, 0.000, 0.000, 0.000,
-        //    -0.009, -0.014, 0.001, 0.010, -0.013, 0.000, -0.010, 0.010, 0.000, 0.010, 0.010, -0.000, 0.001, 0.000, 0.000, -0.000, -0.000, 0.001, 0.002, -0.000, 0.000, 0.003, 0.000, 0.001, 0.000, 0.000, 0.000, 0.000,
-        //    -0.009, -0.014, 0.000, 0.010, -0.013, 0.000, -0.010, 0.010, 0.000, 0.010, 0.010, -0.000, 0.001, -0.000, 0.000, -0.000, 0.000, 0.001, 0.002, -0.000, 0.000, 0.003, 0.001, 0.001, 0.000, 0.000, 0.000, 0.000,
-        //    0.000, 0.001, -0.000, -0.000, 0.001, -0.000, 0.000, -0.000, 0.000, -0.000, -0.000, 0.001, 0.000, -0.000, -0.000, -0.000, 0.000, 0.000, -0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000,
-        //    -0.000, -0.001, 0.000, 0.001, -0.001, -0.000, -0.001, 0.001, 0.000, 0.001, 0.001, 0.000, 1.708, 0.048, 0.784, 0.062, 0.042, 0.053, 0.077, 0.001, -0.061, 0.046, -0.019, -0.029, 0.000, 0.000, 0.000, 0.000,
-        //    0.000, 0.001, -0.000, 0.000, 0.000, 0.000, 0.000, -0.000, -0.000, 0.000, -0.000, -0.000, 0.048, 5.001, -1.631, -0.036, 0.144, 0.040, 0.036, 0.016, -0.051, -0.067, -0.024, -0.005, 0.000, 0.000, 0.000, 0.000,
-        //    -0.000, -0.001, 0.000, 0.000, -0.001, -0.000, -0.001, 0.000, 0.000, 0.000, 0.000, -0.000, 0.784, -1.631, 1.242, 0.057, -0.037, 0.018, 0.034, -0.017, -0.015, 0.058, -0.021, -0.029, 0.000, 0.000, 0.000, 0.000,
-        //    0.000, 0.000, 0.000, 0.001, 0.000, 0.000, 0.000, -0.000, -0.000, -0.000, -0.000, -0.000, 0.062, -0.036, 0.057, 6.228, -0.014, 0.932, 0.059, 0.053, -0.069, 0.148, 0.015, -0.031, 0.000, 0.000, 0.000, 0.000,
-        //    -0.000, 0.000, -0.000, -0.000, 0.001, 0.000, -0.000, 0.000, 0.000, -0.000, 0.000, 0.000, 0.042, 0.144, -0.037, -0.014, 3.011, 0.986, 0.076, 0.030, -0.052, -0.027, 0.057, 0.051, 0.000, 0.000, 0.000, 0.000,
-        //    -0.001, -0.001, -0.000, 0.001, -0.001, 0.000, -0.001, 0.001, -0.000, 0.001, 0.001, 0.000, 0.053, 0.040, 0.018, 0.932, 0.986, 0.885, 0.090, 0.044, -0.055, 0.057, 0.051, -0.003, 0.000, 0.000, 0.000, 0.000,
-        //    -0.002, -0.003, 0.000, 0.002, -0.003, -0.000, -0.001, 0.002, 0.000, 0.002, 0.002, -0.000, 0.077, 0.036, 0.034, 0.059, 0.076, 0.090, 6.230, 0.139, 0.763, 0.013, -0.019, -0.024, 0.000, 0.000, 0.000, 0.000,
-        //    0.000, 0.000, -0.000, -0.000, 0.000, -0.000, 0.000, 0.000, -0.000, -0.000, -0.000, 0.000, 0.001, 0.016, -0.017, 0.053, 0.030, 0.044, 0.139, 3.130, -1.128, -0.010, 0.131, 0.018, 0.000, 0.000, 0.000, 0.000,
-        //    -0.000, -0.001, -0.000, 0.000, -0.001, -0.000, -0.000, 0.000, 0.000, 0.000, 0.000, 0.000, -0.061, -0.051, -0.015, -0.069, -0.052, -0.055, 0.763, -1.128, 0.866, -0.022, -0.053, 0.007, 0.000, 0.000, 0.000, 0.000,
-        //    -0.003, -0.004, -0.000, 0.003, -0.004, -0.000, -0.003, 0.003, 0.000, 0.003, 0.003, 0.000, 0.046, -0.067, 0.058, 0.148, -0.027, 0.057, 0.013, -0.010, -0.022, 2.437, -0.102, 0.938, 0.000, 0.000, 0.000, 0.000,
-        //    -0.000, -0.000, 0.000, 0.000, -0.000, 0.000, -0.000, 0.000, -0.000, 0.000, 0.001, 0.000, -0.019, -0.024, -0.021, 0.015, 0.057, 0.051, -0.019, 0.131, -0.053, -0.102, 4.944, 1.724, 0.000, 0.000, 0.000, 0.000,
-        //    -0.001, -0.001, 0.000, 0.001, -0.001, 0.000, -0.001, 0.001, -0.000, 0.001, 0.001, 0.000, -0.029, -0.005, -0.029, -0.031, 0.051, -0.003, -0.024, 0.018, 0.007, 0.938, 1.724, 1.569, 0.000, 0.000, 0.000, 0.000,
-        //    0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 1.0, 0.000, 0.000, 0.000,
-        //    0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 1.0, 0.000, 0.000,
-        //    0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 1.0, 0.000,
-        //    0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 1.0;
-        //// 过程噪声协方差
-        //for (int i(0); i < _Qdig.rows(); ++i)
-        //{
-        //    if (i < 3)
-        //    {
-        //        _Qdig(i) = 0.0003;
-        //    }
-        //    else if (i < 6)
-        //    {
-        //        _Qdig(i) = 0.0003;
-        //    }
-        //    else
-        //    {
-        //        _Qdig(i) = 0.01;
-        //    }
-        //}
-
-        //_Cu << 268.573, -43.819, -147.211,
-        //    -43.819, 92.949, 58.082,
-        //    -147.211, 58.082, 302.120;
-        //// 过程协方差
-        //_QInit = _Qdig.asDiagonal();
-        //_QInit += _B * _Cu * _B.transpose();
-
-        //estimator.setConv(_QInit, _RInit, _largeVariance * _P);// 初始化一个比较大的预测协方差矩阵
     }
 
     void Body::initParams(Vector3d _leg2body, Vector3d _initRbLegXYPosition, double _Mb[3], Vector<double, 6> _Ib[3], Vector3d _Pb[3])
@@ -310,6 +210,7 @@ namespace Quadruped
             //currentWorldState.linVel_xyz = rotation_c * currentBodyState.linVel_xyz;
             // currentWorldState.angAcc_xyz = rotation_c * currentBodyState.angAcc_xyz;
             currentWorldState.linAcc_xyz = rotation_c * currentBodyState.linAcc_xyz;
+            est->updateTsb(Tsb_c);
         }
         else if (direction == -1)
         {
@@ -475,86 +376,10 @@ namespace Quadruped
         for (int i = 0; i < 4; i++)
         {
             //此处是指足端相对于机身的速度在世界坐标系中的表达，因此需要减去整机速度
-            targetWorldState.leg_s[i].Velocity = _vel.col(i) - est->estimatorState.block<3,1>(3,0);
+            targetWorldState.leg_s[i].Velocity = _vel.col(i) - est->getEstBodyVelS();
             targetBodyState.leg_b[i].Velocity = Rsb_c.transpose() * _vel.col(i);
             legs[i]->setTargetLegVelocity(targetBodyState.leg_b[i].Velocity);
         }
-    }
-
-    //void Body::estimatorRun(Vector4i _contact, Vector4d _phase)
-    //{
-    //    IOFormat CommaInitFmt(StreamPrecision, DontAlignCols, ", ", ", ", "", "", " << ", ";");
-
-    //    // 更新输入变量
-    //    Eigen::Matrix<double, 3, 1> estimatorInput = this->currentWorldState.linAcc_xyz + this->g;
-    //    // 更新参考状态值,并对协方差矩阵进行处理
-    //    Eigen::Matrix<double, 28, 1> y;
-    //    _R = _RInit;
-    //    _Q = _QInit;
-    //    for (int i = 0; i < 4; i++)
-    //    {
-    //        if (_contact(i) == 0)
-    //        {
-    //            _Q.block(6 + 3 * i, 6 + 3 * i, 3, 3) = _largeVariance * Eigen::Matrix<double, 3, 3>::Identity();
-    //            _R.block(12 + 3 * i, 12 + 3 * i, 3, 3) = _largeVariance * Eigen::Matrix<double, 3, 3>::Identity();
-    //            _R(24 + i, 24 + i) = _largeVariance;
-    //        }
-    //        else
-    //        {
-    //            _trust = windowFunc(_phase(i), 0.2);
-    //            _Q.block(6 + 3 * i, 6 + 3 * i, 3, 3) = (1 + (1 - _trust) * _largeVariance) * _QInit.block(6 + 3 * i, 6 + 3 * i, 3, 3);
-    //            _R.block(12 + 3 * i, 12 + 3 * i, 3, 3) = (1 + (1 - _trust) * _largeVariance) * _RInit.block(12 + 3 * i, 12 + 3 * i, 3, 3);
-    //            _R(24 + i, 24 + i) = (1 + (1 - _trust) * _largeVariance) * _RInit(24 + i, 24 + i);
-    //        }
-    //        y.block<3, 1>(i * 3, 0) = this->Rsb_c * currentBodyState.leg_b[i].Position;
-    //        y.block<3, 1>(12 + i * 3, 0) = currentWorldState.leg_s[i].Velocity;
-    //        y(24 + i, 0) = 0;
-    //    }
-    //    // 更新协方差矩阵
-    //    estimator.updateConv(_Q, _R);
-    //    // 卡尔曼滤波执行
-    //    estimator.f(estimatorInput, y);
-    //    // 估计输出
-    //    estimatorOut = estimator.getOut();
-    //    // 估计状态
-    //    estimatorState = estimator.getState();
-    //    // 得到当前机身的位置和速度
-    //    currentWorldState.dist = estimatorState.block<3, 1>(0, 0);
-    //    currentWorldState.linVel_xyz = estimatorState.block<3, 1>(3, 0);
-    //}
-
-    Eigen::Matrix<double, 3, 4> Body::getEstFeetPos()
-    {
-        Eigen::Matrix<double, 3, 4> out;
-        for (int i = 0; i < 4; i++)
-        {
-            out.block<3, 1>(0, i) = est->estimatorState.block<3, 1>(6 + 3 * i, 0);
-        }
-        return out;
-    }
-
-    Eigen::Vector3d Body::getEstFeetPos(int id)
-    {
-        Eigen::Vector3d out;
-        out = est->estimatorState.block<3, 1>(6 + 3 * id, 0);
-        return out;
-    }
-
-    Eigen::Matrix<double, 3, 4> Body::getEstFeetVel()
-    {
-        Eigen::Matrix<double, 3, 4> out;
-        for (int i = 0; i < 4; i++)
-        {
-            out.block<3, 1>(0, i) = est->estimatorOut.block<3, 1>(12 + 3 * i, 0);
-        }
-        return out;
-    }
-
-    Eigen::Vector3d Body::getEstFeetVel(int id)
-    {
-        Eigen::Vector3d out;
-        out = est->estimatorOut.block<3, 1>(12 + 3 * id, 0);
-        return out;
     }
 
     Eigen::Matrix<double, 3, 4> Body::getFKFeetPos()

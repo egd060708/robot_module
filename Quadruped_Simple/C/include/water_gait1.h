@@ -1,6 +1,6 @@
 #ifndef _WATER_GAIT1_H_
 #define _WATER_GAIT1_H_
-#include <iostream>
+#include <stdio.h>
 
 
 #define WG_ROWS 162
