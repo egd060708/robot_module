@@ -1,7 +1,7 @@
 #pragma once
 #include <math.h>
 #include <iostream>
-#include "BodyCtrl.h"
+#include "BodyCtrlNew.h"
 #include "LegCtrl.h"
 using namespace std;
 
@@ -18,7 +18,7 @@ namespace Quadruped
 	class GaitCtrl
 	{
 	public:
-		GaitCtrl(BodyCtrl* _bc, LegCtrl* _lc[4], int timeStep, Eigen::Vector4d* _gaitPhase, Eigen::Vector4i* _gaitContact);
+		GaitCtrl(QpCtrl* _bc, LegCtrl* _lc[4], int timeStep, Eigen::Vector4d* _gaitPhase, Eigen::Vector4i* _gaitContact);
 		Eigen::Vector3d calFootPos(int legID, Eigen::Vector2d vxyTargetGlobal, double dYawTarget, double phase);
 		void initExpectK(Eigen::Vector3d _k);// 初始化期望运动控制参数
 		void initSwingParams(double _period, double _stancePhaseRatio, Eigen::Vector4d _bias, double _t);// 初始化摆动相关参数
@@ -33,7 +33,7 @@ namespace Quadruped
 	public:
 		double dt;
 		// 联合的控制器,机身控制器以及腿部控制器
-		BodyCtrl* bodyController;
+		QpCtrl* bodyController;
 		LegCtrl* legController[4];
 		// 末端落脚点计算部分
 		Eigen::Vector3d nextStep = Eigen::Vector3d::Zero();
@@ -75,7 +75,7 @@ namespace Quadruped
 		double cycloidZVelocity(double height, double phase);
 	};
 
-	GaitCtrl::GaitCtrl(BodyCtrl* _bc, LegCtrl* _lc[4], int timeStep, Eigen::Vector4d* _gaitPhase, Eigen::Vector4i* _gaitContact)
+	GaitCtrl::GaitCtrl(QpCtrl* _bc, LegCtrl* _lc[4], int timeStep, Eigen::Vector4d* _gaitPhase, Eigen::Vector4i* _gaitContact)
 	{
 		this->gaitPhase = _gaitPhase;
 		this->gaitContact = _gaitContact;

@@ -162,7 +162,8 @@ public:
 		estimator.setConv(_QInit, _RInit, _largeVariance * _P);// 初始化一个比较大的预测协方差矩阵
 	}
 
-	inline void estimatorRun(const Eigen::MatrixXd& _u,const Eigen::MatrixXd& _y, const Eigen::Vector4i& _contact, const Eigen::Vector4d& _phase) {
+	inline void estimatorRun(const Eigen::MatrixXd& _u,const Eigen::MatrixXd& _y, const Eigen::Vector4i& _contact, const Eigen::Vector4d& _phase) override
+	{
 		_R = _RInit;
 		_Q = _QInit;
 		for (int i = 0; i < 4; i++)
@@ -191,19 +192,22 @@ public:
 		estimatorState = estimator.getState();
 	}
 
-	inline Eigen::Vector3d getEstFeetPosS(int id) {
+	inline Eigen::Vector3d getEstFeetPosS(int id) override
+	{
 		Eigen::Vector3d out;
 		out = estimatorState.block<3, 1>(6 + 3 * id, 0);
 		return out;
 	}
 
-	inline Eigen::Vector3d getEstFeetVelS(int id) {
+	inline Eigen::Vector3d getEstFeetVelS(int id) override
+	{
 		Eigen::Vector3d out;
 		out = estimatorOut.block<3, 1>(12 + 3 * id, 0);
 		return out;
 	}
 
-	inline Eigen::Matrix<double, 3, 4> getEstFeetPosS() {
+	inline Eigen::Matrix<double, 3, 4> getEstFeetPosS() override
+	{
 		Eigen::Matrix<double, 3, 4> out;
 		for (int i = 0; i < 4; i++)
 		{
@@ -212,7 +216,8 @@ public:
 		return out;
 	}
 
-	inline Eigen::Matrix<double, 3, 4> getEstFeetVelS() {
+	inline Eigen::Matrix<double, 3, 4> getEstFeetVelS() override
+	{
 		Eigen::Matrix<double, 3, 4> out;
 		for (int i = 0; i < 4; i++)
 		{
@@ -221,12 +226,12 @@ public:
 		return out;
 	}
 
-	inline virtual Eigen::Vector3d getEstBodyPosS()
+	inline virtual Eigen::Vector3d getEstBodyPosS() override
 	{
 		return estimatorState.block<3, 1>(0, 0);
 	}
 	
-	inline virtual Eigen::Vector3d getEstBodyVelS()
+	inline virtual Eigen::Vector3d getEstBodyVelS() override
 	{
 		return estimatorState.block<3, 1>(3, 0);
 	}
@@ -317,7 +322,8 @@ public:
 		estimator.setConv(_QInit, _RInit, _largeVariance * _P);// 初始化一个比较大的预测协方差矩阵
 	}
 
-	inline void estimatorRun(const Eigen::MatrixXd& _u, const Eigen::MatrixXd& _y, const Eigen::Vector4i& _contact, const Eigen::Vector4d& _phase) {
+	inline void estimatorRun(const Eigen::MatrixXd& _u, const Eigen::MatrixXd& _y, const Eigen::Vector4i& _contact, const Eigen::Vector4d& _phase) override
+	{
 		_R = _RInit;
 		_Q = _QInit;
 		for (int i = 0; i < 4; i++)
@@ -346,7 +352,8 @@ public:
 		estimatorState = estimator.getState();
 	}
 
-	inline Eigen::Vector3d getEstFeetPosS(int id) {
+	inline Eigen::Vector3d getEstFeetPosS(int id) override
+	{
 		//Eigen::Vector3d out;
 		Eigen::Vector4d trans(0,0,0,1);
 		trans.block(0, 0, 3, 1) = estimatorOut.block<3, 1>(3 * id, 0);
@@ -355,13 +362,15 @@ public:
 		return trans.block(0, 0, 3, 1);
 	}
 
-	inline Eigen::Vector3d getEstFeetVelS(int id) {
+	inline Eigen::Vector3d getEstFeetVelS(int id) override
+	{
 		Eigen::Vector3d out;
 		out = this->_Tsb.block(0,0,3,3) * (estimatorOut.block<3, 1>(12 + 3 * id, 0)+estimatorOut.block<3,1>(24 + 3 * id, 0));
 		return out;
 	}
 
-	inline Eigen::Matrix<double, 3, 4> getEstFeetPosS() {
+	inline Eigen::Matrix<double, 3, 4> getEstFeetPosS() override
+	{
 		Eigen::Matrix<double, 3, 4> out;
 		
 		for (int i = 0; i < 4; i++)
@@ -374,7 +383,8 @@ public:
 		return out;
 	}
 
-	inline Eigen::Matrix<double, 3, 4> getEstFeetVelS() {
+	inline Eigen::Matrix<double, 3, 4> getEstFeetVelS() override
+	{
 		Eigen::Matrix<double, 3, 4> out;
 		for (int i = 0; i < 4; i++)
 		{
@@ -383,12 +393,12 @@ public:
 		return out;
 	}
 
-	inline virtual Eigen::Vector3d getEstBodyPosS()
+	inline virtual Eigen::Vector3d getEstBodyPosS() override
 	{
 		return estimatorState.block<3, 1>(0, 0);
 	}
 
-	inline virtual Eigen::Vector3d getEstBodyVelS()
+	inline virtual Eigen::Vector3d getEstBodyVelS() override
 	{
 		return estimatorState.block<3, 1>(3, 0);
 	}

@@ -8,26 +8,6 @@
 
 namespace Quadruped
 {
-    /*template<typename T>
-    inline T windowFunc(const T x, const T windowRatio, const T xRange = 1.0, const T yRange = 1.0) {
-        if ((x < 0) || (x > xRange)) {
-            std::cout << "[ERROR][windowFunc] The x=" << x << ", which should between [0, xRange]" << std::endl;
-        }
-        if ((windowRatio <= 0) || (windowRatio >= 0.5)) {
-            std::cout << "[ERROR][windowFunc] The windowRatio=" << windowRatio << ", which should between [0, 0.5]" << std::endl;
-        }
-
-        if (x / xRange < windowRatio) {
-            return x * yRange / (xRange * windowRatio);
-        }
-        else if (x / xRange > 1 - windowRatio) {
-            return yRange * (xRange - x) / (xRange * windowRatio);
-        }
-        else {
-            return yRange;
-        }
-    }*/
-
     enum leg_id
     {
         LF = 0,
@@ -83,9 +63,6 @@ namespace Quadruped
         Vector3d g = Vector3d(0, 0, -9.81); // 直接初始化重力加速度向量
         double dt;                          // 控制周期
 
-        Eigen::Matrix<double, 6, 12> dynamicLeft = Eigen::Matrix<double, 6, 12>::Zero();
-        Eigen::Matrix<double, 6, 6> dynamicRight = Eigen::Matrix<double, 6, 6>::Zero();
-
         Vector3d initRbLegXYPosition; // 指定右后腿初始（平面）位置
 
         // 将向量转换成角对称矩阵
@@ -106,8 +83,8 @@ namespace Quadruped
         void bodyAndWorldFramePosition(int8_t direction);
         // 计算足端在世界坐标系中的足端速度
         void legVelocityInWorldFrame();
-        // 更新机器人动力学方程（描述为 left*[f] = right）
-        void updateDynamic();
+        // 更新整机等效重心和惯量参数
+        void updateEqBody();
 
         // 更新目标位姿
         void updateBodyTargetPos(Vector3d _angle, Vector3d _position);
@@ -144,12 +121,6 @@ namespace Quadruped
             this->legs[i] = _legObj[i];
         }
         this->dt = _dt;
-
-        Matrix3d Ident = Matrix3d::Identity(); // 初始化一个3维对角矩阵
-        dynamicLeft.block<3, 3>(0, 0) = Ident;
-        dynamicLeft.block<3, 3>(0, 3) = Ident;
-        dynamicLeft.block<3, 3>(0, 6) = Ident;
-        dynamicLeft.block<3, 3>(0, 9) = Ident;
     }
 
     void Body::initParams(Vector3d _leg2body, Vector3d _initRbLegXYPosition, double _Mb[3], Vector<double, 6> _Ib[3], Vector3d _Pb[3])
@@ -284,7 +255,7 @@ namespace Quadruped
         }
     }
 
-    void Body::updateDynamic()
+    void Body::updateEqBody()
     {
         // 首先计算整机重量惯量参数
         double _M = 0;
@@ -320,17 +291,6 @@ namespace Quadruped
         this->M = _M * Matrix3d::Identity();
         this->I = aI2mI(_I);
 
-        for (int i = 0; i < 4; i++)
-        {
-            //dynamicLeft.block<3, 3>(0, i * 3) = Rsb_c;
-            Vector3d Pbi = Vector3d::Zero();
-            Pbi = Rsb_c * (currentBodyState.leg_b[i].Position - P);
-            //Pbi = (currentBodyState.leg_b[i].Position - Pb);
-            dynamicLeft.block<3, 3>(3, i * 3) = v3_to_m3(Pbi);
-        }
-        dynamicRight.block<3, 3>(0, 0) = M;
-        dynamicRight.block<3, 3>(3, 3) = Rsb_c * I * Rsb_c.transpose();
-        //dynamicRight.block<3, 3>(3, 3) = Ib;
     }
 
     void Body::updateBodyTargetPos(Vector3d _angle, Vector3d _position)
