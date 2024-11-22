@@ -178,6 +178,7 @@ public:
 			{
 				_trust = windowFunc(_phase(i), 0.2);
 				_Q.block(6 + 3 * i, 6 + 3 * i, 3, 3) = (1 + (1 - _trust) * _largeVariance) * _QInit.block(6 + 3 * i, 6 + 3 * i, 3, 3);
+				//std::cout << "trustM: " << _Q.block(6 + 3 * i, 6 + 3 * i, 3, 3) << std::endl;
 				_R.block(12 + 3 * i, 12 + 3 * i, 3, 3) = (1 + (1 - _trust) * _largeVariance) * _RInit.block(12 + 3 * i, 12 + 3 * i, 3, 3);
 				_R(24 + i, 24 + i) = (1 + (1 - _trust) * _largeVariance) * _RInit(24 + i, 24 + i);
 			}
@@ -226,12 +227,12 @@ public:
 		return out;
 	}
 
-	inline virtual Eigen::Vector3d getEstBodyPosS() override
+	inline Eigen::Vector3d getEstBodyPosS() override
 	{
 		return estimatorState.block<3, 1>(0, 0);
 	}
 	
-	inline virtual Eigen::Vector3d getEstBodyVelS() override
+	inline Eigen::Vector3d getEstBodyVelS() override
 	{
 		return estimatorState.block<3, 1>(3, 0);
 	}
@@ -239,12 +240,12 @@ public:
 
 class QpwEst : public EstBase {
 private:
-	kelmanFilter<24, 3, 36> estimator;
+	kelmanFilter<24, 3, 44> estimator;
 	double _largeVariance = 100;// 大的协方差
 	double _ctTrust = 0;// 对于腿部是否触地的置信度
 	double _czTrust = 0;// 对于腿部参考高度的置信度
 	double wp=0.0003, wpd=0.0003, wpw=0.0003, wpwd=0.0003, wpcp=0.01;// 过程协方差参数
-	double vpcp=0.01, vpcpkd=0.01, vpcpwd=0.01;// 测量协方差参数
+	double vpcp=0.01, vpcpkd=0.01, vpcpwd=0.01, wz = 1.0, cpz = 1.0;// 测量协方差参数
 	/* 非线性函数 */
 	double sigmoid(double _x) {
 		return 1 / (1 + exp(-_x));
@@ -266,20 +267,39 @@ private:
 			return exp(-_k2 * _z * _z);
 		}
 	}
+	template<typename T>
+	inline T windowFunc(const T x, const T windowRatio, const T xRange = 1.0, const T yRange = 1.0) {
+		if ((x < 0) || (x > xRange)) {
+			std::cout << "[ERROR][windowFunc] The x=" << x << ", which should between [0, xRange]" << std::endl;
+		}
+		if ((windowRatio <= 0) || (windowRatio >= 0.5)) {
+			std::cout << "[ERROR][windowFunc] The windowRatio=" << windowRatio << ", which should between [0, 0.5]" << std::endl;
+		}
+
+		if (x / xRange < windowRatio) {
+			return x * yRange / (xRange * windowRatio);
+		}
+		else if (x / xRange > 1 - windowRatio) {
+			return yRange * (xRange - x) / (xRange * windowRatio);
+		}
+		else {
+			return yRange;
+		}
+	}
 public:
 	QpwEst(double _dt) {
-		_H.resize(36, 24);
+		_H.resize(44, 24);
 		_A.resize(24, 24);
 		_B.resize(24, 3);
-		_R.resize(36, 36);
-		_RInit.resize(36, 36);
-		_Rdig.resize(36);
+		_R.resize(44, 44);
+		_RInit.resize(44, 44);
+		_Rdig.resize(44);
 		_Q.resize(24, 24);
 		_QInit.resize(24, 24);
 		_Qdig.resize(24);
 		_Cu.resize(3, 3);
 		_P.resize(24, 24);
-		estimatorOut.resize(36);
+		estimatorOut.resize(44);
 		estimatorState.resize(24);
 
 		_H.setZero();
@@ -299,24 +319,39 @@ public:
 		_A.block(0, 3, 3, 3) = Eigen::Matrix3d::Identity();
 		_A.block(6, 9, 3, 3) = Eigen::Matrix3d::Identity();
 		_B.block(3, 0, 3, 3) = Eigen::Matrix3d::Identity();
-		_H.block(0, 0, 3, 3) = Eigen::Matrix3d::Identity();
-		_H.block(0, 6, 3, 3) = -Eigen::Matrix3d::Identity();
-		_H.block(12, 3, 3, 3) = Eigen::Matrix3d::Identity();
-		_H.block(12, 9, 3, 3) = -Eigen::Matrix3d::Identity();
-		_H.block(24, 9, 3, 3) = Eigen::Matrix3d::Identity();
-		_H.block(0, 12, 12, 12) = -Eigen::Matrix<double, 12, 12>::Identity();
+
+		for (int i = 0; i < 4; i++)
+		{
+			_H.block(3 * i, 0, 3, 3) = -Eigen::Matrix3d::Identity();
+			_H.block(3 * i, 6, 3, 3) = Eigen::Matrix3d::Identity();
+			_H.block(12 + 3 * i, 3, 3, 3) = -Eigen::Matrix3d::Identity();
+			_H.block(12 + 3 * i, 9, 3, 3) = Eigen::Matrix3d::Identity();
+			_H.block(24 + 3 * i, 9, 3, 3) = Eigen::Matrix3d::Identity();
+			_H.block(36 + i, 6, 1, 3) = Eigen::Vector3d(0, 0, 1).transpose();
+			_H.block(40 + i, 12 + 3 * i, 1, 3) = Eigen::Vector3d(0, 0, 1).transpose();
+		}
+		_H.block(0, 12, 12, 12) = Eigen::Matrix<double, 12, 12>::Identity();
+
 		estimator.setFunc(_A, _B, _H, _dt);
 
 		_Qdig.block(0, 0, 3, 1).setConstant(wp);
 		_Qdig.block(3, 0, 3, 1).setConstant(wpd);
 		_Qdig.block(6, 0, 3, 1).setConstant(wpw);
 		_Qdig.block(9, 0, 3, 1).setConstant(wpwd);
-		_Qdig.block(12, 0, 12, 1).setConstant(wpcp*(1 + _largeVariance));
+		_Qdig.block(12, 0, 12, 1).setConstant(wpcp);
+
 		_Rdig.block(0, 0, 12, 1).setConstant(vpcp);
 		_Rdig.block(12, 0, 12, 1).setConstant(vpcpkd);
 		_Rdig.block(24, 0, 12, 1).setConstant(vpcpwd);
+		_Rdig.block(36, 0, 4, 1).setConstant(wz);
+		_Rdig.block(40, 0, 4, 1).setConstant(cpz);
 
+		_Cu << 268.573, -43.819, -147.211,
+			-43.819, 92.949, 58.082,
+			-147.211, 58.082, 302.120;
+		// 过程协方差
 		_QInit = _Qdig.asDiagonal();
+		_QInit += _B * _Cu * _B.transpose();// 把加速度计的协方差矩阵嵌入过程协方差矩阵中
 		_RInit = _Rdig.asDiagonal();
 
 		estimator.setConv(_QInit, _RInit, _largeVariance * _P);// 初始化一个比较大的预测协方差矩阵
@@ -330,18 +365,33 @@ public:
 		{
 			if (_contact(i) == 0)
 			{
-				_Q.block(12 + 3 * i, 12 + 3 * i, 3, 3) = _largeVariance * Eigen::Matrix<double, 3, 3>::Identity();
+				_Q.block(12 + 3 * i, 12 + 3 * i, 3, 3) = _largeVariance * _QInit.block(12 + 3 * i, 12 + 3 * i, 3, 3);
+				_R.block(3 * i, 3 * i, 3, 3) = _largeVariance * _RInit.block(3 * i, 3 * i, 3, 3);
+				_R.block(12 + 3 * i, 12 + 3 * i, 3, 3) = _largeVariance * _RInit.block(12 + 3 * i, 12 + 3 * i, 3, 3);
+				_R.block(24 + 3 * i, 24 + 3 * i, 3, 3) = _largeVariance * _RInit.block(24 + 3 * i, 24 + 3 * i, 3, 3);
+				_R(36 + i, 36 + i) = _largeVariance * _RInit(36 + i, 36 + i);
+				_R(40 + i, 40 + i) = _largeVariance * _RInit(40 + i, 40 + i);
 			}
 			else
 			{
-				_ctTrust = ctWin(_phase(i), 0.2);// 针对触地相位做信任度估计
+				_ctTrust = ctWin(_phase(i), 0.1);// 针对触地相位做信任度估计
+				/*_ctTrust = windowFunc(_phase(i), 0.2);*/
 				//_czTrust = czWin(_y(3 * i + 2));// 针对当前设置高度做信任度估计
 				_czTrust = czWin(0);// 针对当前设置高度做信任度估计(暂且设置为0)
 				Eigen::Vector3d _trustM(1, 1, _czTrust);// 获取组合置信度
 				_trustM = _ctTrust * _trustM;
 				_trustM = Eigen::Vector3d::Ones() + _largeVariance * (Eigen::Vector3d::Ones() - _trustM);
-				_Q.block(12 + 3 * i, 12 + 3 * i, 3, 3) = _trustM.asDiagonal() * _QInit.block(12 + 3 * i, 12 + 3 * i, 3, 3);			}
+				_Q.block(12 + 3 * i, 12 + 3 * i, 3, 3) = _trustM.asDiagonal() * _QInit.block(12 + 3 * i, 12 + 3 * i, 3, 3);
+				//std::cout << "trustM: " << _Q.block(12 + 3 * i, 12 + 3 * i, 3, 3) << std::endl;
+				_R.block(3 * i, 3 * i, 3, 3) = _trustM.asDiagonal() * _RInit.block(3 * i, 3 * i, 3, 3);
+				_R.block(12 + 3 * i, 12 + 3 * i, 3, 3) = _trustM.asDiagonal() * _RInit.block(12 + 3 * i, 12 + 3 * i, 3, 3);
+				_R.block(24 + 3 * i, 24 + 3 * i, 3, 3) = _trustM.asDiagonal() * _RInit.block(24 + 3 * i, 24 + 3 * i, 3, 3);
+				_R(36 + i, 36 + i) = _trustM(2) * _RInit(36 + i, 36 + i);
+				_R(40 + i, 40 + i) = _trustM(2) * _RInit(40 + i, 40 + i);
+			}
 		}
+		/*std::cout << "_R: \n" << _R << std::endl;
+		std::cout << "_Q: \n" << _Q << std::endl;*/
 		// 更新协方差矩阵
 		estimator.updateConv(_Q, _R);
 		// 卡尔曼滤波执行
@@ -354,18 +404,24 @@ public:
 
 	inline Eigen::Vector3d getEstFeetPosS(int id) override
 	{
-		//Eigen::Vector3d out;
-		Eigen::Vector4d trans(0,0,0,1);
-		trans.block(0, 0, 3, 1) = estimatorOut.block<3, 1>(3 * id, 0);
-		trans = this->_Tsb * trans;
-		//out = trans.block(0, 0, 3, 1);
-		return trans.block(0, 0, 3, 1);
+		////Eigen::Vector3d out;
+		//Eigen::Vector4d trans(0,0,0,1);
+		//trans.block(0, 0, 3, 1) = estimatorOut.block<3, 1>(3 * id, 0);
+		//trans = this->_Tsb * trans;
+		////out = trans.block(0, 0, 3, 1);
+		//return trans.block(0, 0, 3, 1);
+
+		Eigen::Vector3d out;
+		out = estimatorState.block<3, 1>(12 + 3 * id, 0);
+		return out;
 	}
 
 	inline Eigen::Vector3d getEstFeetVelS(int id) override
 	{
 		Eigen::Vector3d out;
-		out = this->_Tsb.block(0,0,3,3) * (estimatorOut.block<3, 1>(12 + 3 * id, 0)+estimatorOut.block<3,1>(24 + 3 * id, 0));
+		//out = this->_Tsb.block(0,0,3,3) * (estimatorOut.block<3, 1>(12 + 3 * id, 0)+estimatorOut.block<3,1>(24 + 3 * id, 0));
+		//out = estimatorOut.block<3, 1>(12 + 3 * id, 0) + estimatorOut.block<3, 1>(24 + 3 * id, 0);
+		out = estimatorOut.block<3, 1>(12 + 3 * id, 0);
 		return out;
 	}
 
@@ -375,10 +431,12 @@ public:
 		
 		for (int i = 0; i < 4; i++)
 		{
-			Eigen::Vector4d trans(0,0,0,1);
+			/*Eigen::Vector4d trans(0,0,0,1);
 			trans.block(0, 0, 3, 1) = estimatorOut.block<3, 1>(3 * i, 0);
 			trans = this->_Tsb * trans;
-			out.block<3, 1>(0, i) = trans.block(0,0,3,1);
+			out.block<3, 1>(0, i) = trans.block(0,0,3,1);*/
+
+			out.block(0, 0, 3, 1) = estimatorState.block<3, 1>(12 + 3 * i, 0);
 		}
 		return out;
 	}
@@ -388,19 +446,30 @@ public:
 		Eigen::Matrix<double, 3, 4> out;
 		for (int i = 0; i < 4; i++)
 		{
-			out.block<3, 1>(0, i) = this->_Tsb.block(0, 0, 3, 3) * (estimatorOut.block<3, 1>(12 + 3 * i, 0) + estimatorOut.block<3, 1>(24 + 3 * i, 0));
+			//out.block<3, 1>(0, i) = this->_Tsb.block(0, 0, 3, 3) * (estimatorOut.block<3, 1>(12 + 3 * i, 0) + estimatorOut.block<3, 1>(24 + 3 * i, 0));
+			//out.block<3, 1>(0, i) = estimatorOut.block<3, 1>(12 + 3 * i, 0) + estimatorOut.block<3,1>(24 + 3 * i, 0);
+			out.block<3, 1>(0, i) = estimatorOut.block<3, 1>(12 + 3 * i, 0);
 		}
 		return out;
 	}
 
-	inline virtual Eigen::Vector3d getEstBodyPosS() override
+	inline Eigen::Vector3d getEstBodyPosS() override
 	{
 		return estimatorState.block<3, 1>(0, 0);
 	}
 
-	inline virtual Eigen::Vector3d getEstBodyVelS() override
+	inline Eigen::Vector3d getEstBodyVelS() override
 	{
 		return estimatorState.block<3, 1>(3, 0);
 	}
 
+	inline Eigen::Vector3d getEstFootPosS()
+	{
+		return estimatorState.block<3, 1>(6, 0);
+	}
+
+	inline Eigen::Vector3d getEstFootVelS()
+	{
+		return estimatorState.block<3, 1>(9, 0);
+	}
 };

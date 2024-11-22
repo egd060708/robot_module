@@ -19,8 +19,8 @@ namespace Quadruped
         Vector3d r = Vector3d::Zero();
         Vector3d r_dot = Vector3d::Zero();
         // 末端执行器状态
-        Vector3d pe = Vector3d::Zero();
-        Vector3d pe_dot = Vector3d::Zero();
+        Vector4d pe = Vector4d::Zero();
+        Vector4d pe_dot = Vector4d::Zero();
         
     } balanceState;
 
@@ -251,6 +251,10 @@ namespace Quadruped
                 linPID[i].Adjust(0, currentBalanceState.p_dot(i));
                 targetBalanceState.p_dot(i) = linPID[i].out;
             }
+            else
+            {
+                //targetBalanceState.p_dot(i) = currentBalanceState.p_dot(i);
+            }
 
             if (_enList(2 * i + 1) == true)
             {
@@ -262,6 +266,10 @@ namespace Quadruped
                 {
                     targetBalanceState.r_dot = bodyObject->Rsb_c * targetBalanceState.r_dot;
                 }
+            }
+            else
+            {
+                //targetBalanceState.r_dot(i) = currentBalanceState.r_dot(i);
             }
         }
 
@@ -287,6 +295,250 @@ namespace Quadruped
         for (int i = 0; i < 4; i++)
         {
             this->legsCtrl[i]->setEndForceTar(_force.col(i));
+        }
+    }
+
+    class QpwCtrl : public CtrlBase {
+    private:
+
+    public:
+        // 机器人平衡控制器
+        mpcCal<10, 16, 20, 1, 5> balanceController;
+        double u = 2;// 摩擦系数
+        double force_c = 200;// 输出力限制限制
+        double tau_c = 20; // 输出力矩限制
+
+        // 用于机身位控的pid
+        PIDmethod linPID[3];
+        PIDmethod angPID[3];
+
+        // 构造函数
+        QpwCtrl(Body* _obj, LegCtrl* _legsCtrl[4], int timeStep) :CtrlBase(_obj, _legsCtrl, timeStep)
+        {
+            dynamicLeft.resize(10, 16);
+            dynamicRight.resize(10, 10);
+            mpcOut.resize(4, 4);
+            A.resize(10, 10);
+            B.resize(10, 16);
+            Q.resize(10, 10);
+            F.resize(10, 10);
+            R.resize(16, 16);
+            W.resize(16, 16);
+            lb.resize(16, 1);
+            ub.resize(16, 1);
+            cA.resize(20, 16);
+            Alb.resize(20, 1);
+            Aub.resize(20, 1);
+            y.resize(10);
+            x.resize(10);
+
+            dynamicRight.setZero();
+            dynamicRight.block(6, 6, 4, 4) = (bodyObject->legs[0]->Ic[3](1) / pow(bodyObject->legs[0]->L4 + bodyObject->legs[0]->L4b, 2) + bodyObject->legs[0]->Mc[3]) * Matrix4d::Identity();
+            dynamicLeft.setZero();
+            dynamicLeft.block<3, 3>(0, 0).setIdentity();
+            dynamicLeft.block<3, 3>(0, 3).setIdentity();
+            dynamicLeft.block<3, 3>(0, 6).setIdentity();
+            dynamicLeft.block<3, 3>(0, 9).setIdentity();
+            dynamicLeft(6, 0) = -1;
+            dynamicLeft(7, 3) = -1;
+            dynamicLeft(8, 6) = -1;
+            dynamicLeft(9, 9) = -1;
+            dynamicLeft.block(6, 12, 4, 4) = (1. / (bodyObject->legs[0]->L4 + bodyObject->legs[0]->L4b)) * Matrix4d::Identity();
+            mpcOut.setZero();
+            A.setZero();
+            B.setZero();
+            Q.setZero();
+            R.setZero();
+            lb.block(0, 0, 12, 1).setConstant(-force_c);
+            ub.block(0, 0, 12, 1).setConstant(force_c);
+            lb.block(12, 0, 4, 1).setConstant(-tau_c);
+            ub.block(12, 0, 4, 1).setConstant(tau_c);
+            cA.setZero();
+
+            // unitree constrain
+            Eigen::Matrix<double, 5, 3> _cA;
+            _cA.setZero();
+            _cA << 1, 0, u, -1, 0, u, 0, 1, u, 0, -1, u, 0, 0, 1;
+            cA.block<5, 3>(0, 0) = _cA;
+            cA.block<5, 3>(5, 3) = _cA;
+            cA.block<5, 3>(10, 6) = _cA;
+            cA.block<5, 3>(15, 9) = _cA;
+            Alb.setZero();
+            Aub.setConstant(100000.);
+        }
+
+        // 更新机器人动力学方程（描述为 left*[f] = right）
+        void updateDynamic() override;
+        // 导入权重参数
+        void importWeight(const VectorXd& _Q, const VectorXd& _F, const VectorXd& _R, const VectorXd& _W) override;
+        void importPDparam(const Vector<double, 9>& lin, const Vector<double, 9>& ang);
+        // 更新当前状态
+        void updateBalanceState() override;
+        // 设置终端目标
+        void setPositionTarget(const Vector3d& _p, const Vector3d& _r, const Vector4d& _pe);
+        void setVelocityTarget(const Vector3d& _p_dot, const Vector3d& _r_dot, const Vector4d& _pe_dot);
+        // 执行mpc控制器
+        void mpc_adjust(const VectorX<bool>& _enList) override;
+        // 设置接触约束
+        void setContactConstrain(const Vector4i& _contact);
+        // 直接设置四足输出
+        void setLegsForce(const Eigen::Matrix<double, 3, 4>& _force, const Eigen::Vector4d& _tau);
+    };
+
+    void QpwCtrl::updateDynamic()
+    {
+        for (int i = 0; i < 4; i++)
+        {
+            //dynamicLeft.block<3, 3>(0, i * 3) = Rsb_c;
+            Vector3d Pbi = Vector3d::Zero();
+            Pbi = bodyObject->Rsb_c * (bodyObject->currentBodyState.leg_b[i].Position - bodyObject->P);
+            //Pbi = (currentBodyState.leg_b[i].Position - Pb);
+            dynamicLeft.block<3, 3>(3, i * 3) = bodyObject->v3_to_m3(Pbi);
+        }
+        dynamicRight.block<3, 3>(0, 0) = bodyObject->M;
+        dynamicRight.block<3, 3>(3, 3) = bodyObject->Rsb_c * bodyObject->I * bodyObject->Rsb_c.transpose();
+        Matrix3d s = Matrix3d::Zero();
+        s(0,0) = 1;
+        dynamicLeft.block(6, 0, 4, 3) = -s*bodyObject->Rsb_c.transpose();
+        s(0, 0) = 0;
+        s(1, 0) = 1;
+        dynamicLeft.block(7, 3, 4, 3) = -s * bodyObject->Rsb_c.transpose();
+        s(1, 0) = 0;
+        s(2, 0) = 1;
+        dynamicLeft.block(8, 6, 4, 3) = -s * bodyObject->Rsb_c.transpose();
+        s(2, 0) = 0;
+        s(3, 0) = 1;
+        dynamicLeft.block(9, 9, 4, 3) = -s * bodyObject->Rsb_c.transpose();
+    }
+
+    void QpwCtrl::importWeight(const VectorXd& _Q, const VectorXd& _F, const VectorXd& _R, const VectorXd& _W)
+    {
+        for (int i = 0; i < 10; i++)
+        {
+            Q(i, i) = _Q(i);
+            F(i, i) = _F(i);
+        }
+        for (int j = 0; j < 16; j++)
+        {
+            R(j, j) = _R(j);
+            W(j, j) = _W(j);
+        }
+    }
+
+    void QpwCtrl::importPDparam(const Vector<double, 9>& lin, const Vector<double, 9>& ang)
+    {
+        for (int i = 0; i < 3; i++)
+        {
+            linPID[i].Params_Config(lin(0 + i * 3), 0, lin(1 + i * 3), 0, abs(lin(2 + i * 3)), -abs(lin(2 + i * 3)));
+            angPID[i].Params_Config(ang(0 + i * 3), 0, ang(1 + i * 3), 0, abs(ang(2 + i * 3)), -abs(ang(2 + i * 3)));
+        }
+    }
+
+    void QpwCtrl::updateBalanceState()
+    {
+        currentBalanceState.p = bodyObject->currentWorldState.dist;
+        currentBalanceState.p_dot = bodyObject->currentWorldState.linVel_xyz;
+        currentBalanceState.r = bodyObject->currentBodyState.Ang_xyz;
+        currentBalanceState.r_dot = bodyObject->currentWorldState.angVel_xyz;
+    }
+
+    void QpwCtrl::setPositionTarget(const Vector3d& _p, const Vector3d& _r, const Vector4d& _pe)
+    {
+        targetBalanceState.p = _p;
+        targetBalanceState.r = _r;
+        targetBalanceState.pe = _pe;
+    }
+
+    void QpwCtrl::setVelocityTarget(const Vector3d& _p_dot, const Vector3d& _r_dot, const Vector4d& _pe_dot)
+    {
+        currentBalanceState.p = _p_dot;
+        currentBalanceState.r = _r_dot;
+        currentBalanceState.pe_dot = _pe_dot;
+    }
+
+    void QpwCtrl::mpc_adjust(const VectorX<bool>& _enList)
+    {
+        static multiCircle angC[3] = { multiCircle(3.1415926),multiCircle(3.1415926),multiCircle(3.1415926) };
+        for (int i = 0; i < 3; i++)
+        {
+            if (_enList(2 * i) == true)
+            {
+                linPID[i].target = targetBalanceState.p(i);
+                linPID[i].current = currentBalanceState.p(i);
+                linPID[i].Adjust(0, currentBalanceState.p_dot(i));
+                targetBalanceState.p_dot(i) = linPID[i].out;
+            }
+            else
+            {
+                targetBalanceState.p_dot(i) = currentBalanceState.p_dot(i);
+            }
+
+            if (_enList(2 * i + 1) == true)
+            {
+                angPID[i].target = targetBalanceState.r(i);
+                angPID[i].current = angC[i].f(currentBalanceState.r(i));
+                angPID[i].Adjust(0, bodyObject->currentBodyState.angVel_xyz(i));
+                targetBalanceState.r_dot(i) = angPID[i].out;
+                if (i == 2)
+                {
+                    targetBalanceState.r_dot = bodyObject->Rsb_c * targetBalanceState.r_dot;
+                }
+            }
+            else
+            {
+                targetBalanceState.r_dot(i) = currentBalanceState.r_dot(i);
+            }
+        }
+
+        B = dynamicRight.inverse() * dynamicLeft;
+        balanceController.setConstrain(lb, ub);
+        balanceController.setBoxConstrain(cA, Alb, Aub);
+        y.block<3, 1>(0, 0) = targetBalanceState.p_dot;
+        y.block<3, 1>(3, 0) = targetBalanceState.r_dot;
+        y.block<4, 1>(6, 0) = targetBalanceState.pe_dot;
+        x.block<3, 1>(0, 0) = currentBalanceState.p_dot;
+        x.block<3, 1>(3, 0) = currentBalanceState.r_dot;
+        x.block<4, 1>(6, 0) = currentBalanceState.pe_dot;
+        balanceController.mpc_update(y, x, 100, 0.002);
+        balanceController.mpc_init(A, B, Q, F, R, W, dt);
+        balanceController.mpc_solve();
+        for (int i = 0; i < 4; i++)
+        {
+            this->mpcOut.block(0,0,3,1) = -bodyObject->Rsb_c.transpose() * balanceController.getOutput().block<3, 1>(3 * i, 0);
+            this->mpcOut(3, i) = balanceController.getOutput()(12 + i, 0);
+        }
+    }
+
+    void QpwCtrl::setContactConstrain(const Vector4i& _contact)
+    {
+        Eigen::Matrix<double, 5, 3> _cA;
+        _cA.setZero();
+        Eigen::Matrix<double, 5, 1> _Aub;
+        _Aub.setZero();
+        // 若该腿不触地，则清零约束矩阵
+        for (int i = 0; i < 4; i++)
+        {
+            if (_contact(i) == 1)
+            {
+                _cA << 1, 0, u, -1, 0, u, 0, 1, u, 0, -1, u, 0, 0, 1;
+                _Aub.setConstant(100000.);
+            }
+            else
+            {
+                _cA << 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+                _Aub.setZero();
+            }
+            this->cA.block<5, 3>(5 * i, 3 * i) = _cA;
+            this->Aub.block<5, 1>(5 * i, 0) = _Aub;
+        }
+    }
+
+    void QpwCtrl::setLegsForce(const Eigen::Matrix<double, 3, 4>& _force, const Eigen::Vector4d& _tau)
+    {
+        for (int i = 0; i < 4; i++)
+        {
+            this->legsCtrl[i]->setEndForceTar(_force.col(i));
+            this->legsCtrl[i]->setEndTauTar(_tau(i));
         }
     }
 }

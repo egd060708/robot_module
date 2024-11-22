@@ -21,15 +21,16 @@ namespace Quadruped
     public:
         LegCtrl(Leg* _l, int timeStep);
         // 更新电机观测值
-        void updateMotorAng(Vector3d _a);
-        void updateMotorVel(Vector3d _w);
-        void updateMotorTau(Vector3d _t);
+        void updateMotorAng(Vector4d _a);
+        void updateMotorVel(Vector4d _w);
+        void updateMotorTau(Vector4d _t);
         // 更新末端目标值
         void setEndPositionTar(Vector3d _p);
         void setEndVelocityTar(Vector3d _v);
         void setEndForceTar(Vector3d _f);
+        void setEndTauTar(double _t);
         // 对腿部整体进行状态计算
-        void legStateCal();
+        void legStateCal(const Vector3d& _imu, const Vector3d& _gyro);
         // 腿部控制执行
         void legCtrlPosition();  // 直接对腿部电机进行位控
         void legCtrlForce();     // 对腿部末端位置进行力控
@@ -91,17 +92,17 @@ namespace Quadruped
         }
     }
 
-    void LegCtrl::updateMotorAng(Vector3d _a)
+    void LegCtrl::updateMotorAng(Vector4d _a)
     {
         legObject->updateJointAng(_a);
     }
 
-    void LegCtrl::updateMotorVel(Vector3d _w)
+    void LegCtrl::updateMotorVel(Vector4d _w)
     {
         legObject->updateJointVel(_w);
     }
 
-    void LegCtrl::updateMotorTau(Vector3d _t)
+    void LegCtrl::updateMotorTau(Vector4d _t)
     {
         legObject->updateJointTau(_t);
     }
@@ -121,10 +122,15 @@ namespace Quadruped
         legObject->setTargetLegForce(_f);
     }
 
-    void LegCtrl::legStateCal()
+    void LegCtrl::setEndTauTar(double _t)
+    {
+        legObject->setTargetEndTau(_t);
+    }
+
+    void LegCtrl::legStateCal(const Vector3d& _imu, const Vector3d& _gyro)
     {
         legObject->jacobi = legObject->legJacobi_Cal(legObject->currentJoint);
-        legObject->legFK_Cal();
+        legObject->legFK_Cal(_imu,_gyro);
         legObject->legIP_Cal();
         legObject->legIK_Cal();
     }

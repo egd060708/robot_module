@@ -250,8 +250,12 @@ namespace Quadruped
             Matrix3d w = v3_to_m3(currentBodyState.angVel_xyz);
             // 更新足端相对于机身坐标系的速度
             currentBodyState.leg_b[i].Velocity = legs[i]->currentLeg.Velocity;
+            currentBodyState.leg_b[i].VelocityW = legs[i]->currentLeg.VelocityW;
+            currentBodyState.leg_b[i].VelocityG = legs[i]->currentLeg.VelocityG;
             // 计算足端相对于世界坐标系的速度
             currentWorldState.leg_s[i].Velocity = Rsb_c * (w * currentBodyState.leg_b[i].Position + legs[i]->currentLeg.Velocity);
+            currentWorldState.leg_s[i].VelocityW = Rsb_c * legs[i]->currentLeg.VelocityW;
+            currentWorldState.leg_s[i].VelocityG = Rsb_c * (w * currentBodyState.leg_b[i].Position + legs[i]->currentLeg.VelocityG);
         }
     }
 
@@ -364,7 +368,7 @@ namespace Quadruped
         Eigen::Matrix<double, 3, 4> out;
         for (int i = 0; i < 4; i++)
         {
-            out.block<3, 1>(0, i) = currentWorldState.leg_s[i].Velocity;
+            out.block<3, 1>(0, i) = currentWorldState.leg_s[i].VelocityG;
         }
         return out;
     }
@@ -372,7 +376,7 @@ namespace Quadruped
     Eigen::Vector3d Body::getFKFeetVel(int id)
     {
         Eigen::Vector3d out;
-        out = currentWorldState.leg_s[id].Velocity;
+        out = currentWorldState.leg_s[id].VelocityG;
         return out;
     }
 
