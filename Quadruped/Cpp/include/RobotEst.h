@@ -420,8 +420,8 @@ public:
 	{
 		Eigen::Vector3d out;
 		//out = this->_Tsb.block(0,0,3,3) * (estimatorOut.block<3, 1>(12 + 3 * id, 0)+estimatorOut.block<3,1>(24 + 3 * id, 0));
-		//out = estimatorOut.block<3, 1>(12 + 3 * id, 0) + estimatorOut.block<3, 1>(24 + 3 * id, 0);
-		out = estimatorOut.block<3, 1>(12 + 3 * id, 0);
+		out = estimatorOut.block<3, 1>(12 + 3 * id, 0) + estimatorOut.block<3, 1>(24 + 3 * id, 0);
+		//out = estimatorOut.block<3, 1>(12 + 3 * id, 0);
 		return out;
 	}
 
@@ -447,8 +447,8 @@ public:
 		for (int i = 0; i < 4; i++)
 		{
 			//out.block<3, 1>(0, i) = this->_Tsb.block(0, 0, 3, 3) * (estimatorOut.block<3, 1>(12 + 3 * i, 0) + estimatorOut.block<3, 1>(24 + 3 * i, 0));
-			//out.block<3, 1>(0, i) = estimatorOut.block<3, 1>(12 + 3 * i, 0) + estimatorOut.block<3,1>(24 + 3 * i, 0);
-			out.block<3, 1>(0, i) = estimatorOut.block<3, 1>(12 + 3 * i, 0);
+			out.block<3, 1>(0, i) = estimatorOut.block<3, 1>(12 + 3 * i, 0) + estimatorOut.block<3,1>(24 + 3 * i, 0);
+			//out.block<3, 1>(0, i) = estimatorOut.block<3, 1>(12 + 3 * i, 0);
 		}
 		return out;
 	}

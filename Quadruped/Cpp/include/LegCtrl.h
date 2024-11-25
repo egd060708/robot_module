@@ -24,6 +24,9 @@ namespace Quadruped
         void updateMotorAng(Vector4d _a);
         void updateMotorVel(Vector4d _w);
         void updateMotorTau(Vector4d _t);
+        void updateMotorAng(Vector3d _a);
+        void updateMotorVel(Vector3d _w);
+        void updateMotorTau(Vector3d _t);
         // 更新末端目标值
         void setEndPositionTar(Vector3d _p);
         void setEndVelocityTar(Vector3d _v);
@@ -103,6 +106,21 @@ namespace Quadruped
     }
 
     void LegCtrl::updateMotorTau(Vector4d _t)
+    {
+        legObject->updateJointTau(_t);
+    }
+
+    void LegCtrl::updateMotorAng(Vector3d _a)
+    {
+        legObject->updateJointAng(_a);
+    }
+
+    void LegCtrl::updateMotorVel(Vector3d _w)
+    {
+        legObject->updateJointVel(_w);
+    }
+
+    void LegCtrl::updateMotorTau(Vector3d _t)
     {
         legObject->updateJointTau(_t);
     }

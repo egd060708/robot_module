@@ -99,6 +99,9 @@ namespace Quadruped
         void updateJointAng(Vector4d _jAngle);          // 更新各关节观测角度
         void updateJointVel(Vector4d _jVel);            // 更新关节观测角速度
         void updateJointTau(Vector4d _jTorque);         // 更新关节观测力矩
+        void updateJointAng(Vector3d _jAngle);          // 更新各关节观测角度
+        void updateJointVel(Vector3d _jVel);            // 更新关节观测角速度
+        void updateJointTau(Vector3d _jTorque);         // 更新关节观测力矩
         Matrix3d legJacobi_Cal(JointS &_joint);         // 根据当前电机角速度计算雅可比矩阵
         void legFK_Cal();                               //不涉及接触点牵连速度的正运动学映射
         void legFK_Cal(const Vector3d& _imu, const Vector3d& _gyro);// 包括由当前角度映射末端位姿，由当前角速度映射末端速度，由当前力矩映射当前末端力
@@ -128,6 +131,21 @@ namespace Quadruped
     {
         currentJoint.Torque = _jTorque.block(0,0,3,1);
         currentJoint.Foot_Torque = _jTorque(3);
+    }
+
+    void Leg::updateJointAng(Vector3d _jAngle)
+    {
+        currentJoint.Angle = _jAngle;
+    }
+
+    void Leg::updateJointVel(Vector3d _jVel)
+    {
+        currentJoint.Velocity = _jVel;
+    }
+
+    void Leg::updateJointTau(Vector3d _jTorque)
+    {
+        currentJoint.Torque = _jTorque;
     }
 
     Matrix3d Leg::legJacobi_Cal(JointS& _joint)
@@ -176,6 +194,7 @@ namespace Quadruped
         currentLeg.Velocity = jacobi * currentJoint.Velocity;
         // 接触点转动牵连速度
         currentLeg.VelocityW << Reff * (_gyro(1) * cos(currentJoint.Angle(0)) + currentJoint.Velocity(1) + currentJoint.Velocity(2) + currentJoint.Foot_Velocity), L4b* (_gyro(0) + currentJoint.Velocity(0)), 0;
+        //std::cout << "currentLeg.Vel: \n" << currentLeg.VelocityW << std::endl;
         // 得到总的接触速度
         currentLeg.VelocityG = currentLeg.Velocity + currentLeg.VelocityW;
         // 雅可比矩阵完成从当前关节力矩到当前末端虚拟力的映射
