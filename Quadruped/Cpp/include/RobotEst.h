@@ -16,19 +16,27 @@ protected:
 	Eigen::MatrixXd _P;
 
 	Eigen::Matrix4d _Tsb;
+	Eigen::Matrix4d _Tsbi;
 public:
 	Eigen::VectorXd estimatorOut;
 	Eigen::VectorXd estimatorState;
 	inline virtual void estimatorRun(const Eigen::MatrixXd& _u,const Eigen::MatrixXd& _y,const Eigen::Vector4i& _contact,const Eigen::Vector4d& _phase) = 0;
 	inline virtual Eigen::Vector3d getEstFeetPosS(int id) = 0;
 	inline virtual Eigen::Vector3d getEstFeetVelS(int id) = 0;
+	inline virtual Eigen::Vector3d getEstFeetPosB(int id) = 0;
+	inline virtual Eigen::Vector3d getEstFeetVelB(int id) = 0;
 	inline virtual Eigen::Matrix<double, 3, 4> getEstFeetPosS() = 0;
 	inline virtual Eigen::Matrix<double, 3, 4> getEstFeetVelS() = 0;
+	inline virtual Eigen::Matrix<double, 3, 4> getEstFeetPosB() = 0;
+	inline virtual Eigen::Matrix<double, 3, 4> getEstFeetVelB() = 0;
 	inline virtual Eigen::Vector3d getEstBodyPosS() = 0;
 	inline virtual Eigen::Vector3d getEstBodyVelS() = 0;
+	inline virtual Eigen::Vector3d getEstFootPosS() { return Eigen::Vector3d(0, 0, 0); }
+	inline virtual Eigen::Vector3d getEstFootVelS(){ return Eigen::Vector3d(0, 0, 0); }
 	inline void updateTsb(const Eigen::MatrixXd& _T)
 	{
 		_Tsb = _T;
+		_Tsbi = _Tsb.inverse();
 	}
 };
 
@@ -200,10 +208,25 @@ public:
 		return out;
 	}
 
+	inline Eigen::Vector3d getEstFeetPosB(int id) override
+	{
+		Eigen::Vector4d out(0, 0, 0, 1);
+		out.block(0, 0, 3, 1) = estimatorState.block<3, 1>(6 + 3 * id, 0);
+		out = this->_Tsbi * out;
+		return out.block(0, 0, 3, 1);
+	}
+
 	inline Eigen::Vector3d getEstFeetVelS(int id) override
 	{
 		Eigen::Vector3d out;
 		out = estimatorOut.block<3, 1>(12 + 3 * id, 0);
+		return out;
+	}
+
+	inline Eigen::Vector3d getEstFeetVelB(int id) override
+	{
+		Eigen::Vector3d out;
+		out = this->_Tsbi.block(0, 0, 3, 3) * estimatorOut.block<3, 1>(12 + 3 * id, 0);
 		return out;
 	}
 
@@ -217,12 +240,36 @@ public:
 		return out;
 	}
 
+	inline Eigen::Matrix<double, 3, 4> getEstFeetPosB() override
+	{
+		Eigen::Matrix<double, 3, 4> out;
+
+		for (int i = 0; i < 4; i++)
+		{
+			Eigen::Vector4d trans(0, 0, 0, 1);
+			trans.block(0, 0, 3, 1) = estimatorState.block<3, 1>(6 + 3 * i, 0);
+			trans = this->_Tsbi * trans;
+			out.block<3, 1>(0, i) = trans.block(0, 0, 3, 1);
+		}
+		return out;
+	}
+
 	inline Eigen::Matrix<double, 3, 4> getEstFeetVelS() override
 	{
 		Eigen::Matrix<double, 3, 4> out;
 		for (int i = 0; i < 4; i++)
 		{
 			out.block<3, 1>(0, i) = estimatorOut.block<3, 1>(12 + 3 * i, 0);
+		}
+		return out;
+	}
+
+	inline Eigen::Matrix<double, 3, 4> getEstFeetVelB() override
+	{
+		Eigen::Matrix<double, 3, 4> out;
+		for (int i = 0; i < 4; i++)
+		{
+			out.block<3, 1>(0, i) = this->_Tsbi.block(0, 0, 3, 3) * estimatorOut.block<3, 1>(12 + 3 * i, 0);
 		}
 		return out;
 	}
@@ -416,12 +463,27 @@ public:
 		return out;
 	}
 
+	inline Eigen::Vector3d getEstFeetPosB(int id) override
+	{
+		Eigen::Vector4d out(0,0,0,1);
+		out.block(0, 0, 3, 1) = estimatorState.block<3, 1>(12 + 3 * id, 0);
+		out = this->_Tsbi * out;
+		return out.block(0, 0, 3, 1);
+	}
+
 	inline Eigen::Vector3d getEstFeetVelS(int id) override
 	{
 		Eigen::Vector3d out;
 		//out = this->_Tsb.block(0,0,3,3) * (estimatorOut.block<3, 1>(12 + 3 * id, 0)+estimatorOut.block<3,1>(24 + 3 * id, 0));
 		out = estimatorOut.block<3, 1>(12 + 3 * id, 0) + estimatorOut.block<3, 1>(24 + 3 * id, 0);
 		//out = estimatorOut.block<3, 1>(12 + 3 * id, 0);
+		return out;
+	}
+
+	inline Eigen::Vector3d getEstFeetVelB(int id) override
+	{
+		Eigen::Vector3d out;
+		out = this->_Tsbi.block(0,0,3,3) * (/*estimatorOut.block<3, 1>(12 + 3 * id, 0) + */estimatorOut.block<3, 1>(24 + 3 * id, 0));
 		return out;
 	}
 
@@ -441,6 +503,20 @@ public:
 		return out;
 	}
 
+	inline Eigen::Matrix<double, 3, 4> getEstFeetPosB() override
+	{
+		Eigen::Matrix<double, 3, 4> out;
+
+		for (int i = 0; i < 4; i++)
+		{
+			Eigen::Vector4d trans(0,0,0,1);
+			trans.block(0, 0, 3, 1) = estimatorState.block<3, 1>(12 + 3 * i, 0);
+			trans = this->_Tsbi * trans;
+			out.block<3, 1>(0, i) = trans.block(0,0,3,1);
+		}
+		return out;
+	}
+
 	inline Eigen::Matrix<double, 3, 4> getEstFeetVelS() override
 	{
 		Eigen::Matrix<double, 3, 4> out;
@@ -449,6 +525,16 @@ public:
 			//out.block<3, 1>(0, i) = this->_Tsb.block(0, 0, 3, 3) * (estimatorOut.block<3, 1>(12 + 3 * i, 0) + estimatorOut.block<3, 1>(24 + 3 * i, 0));
 			out.block<3, 1>(0, i) = estimatorOut.block<3, 1>(12 + 3 * i, 0) + estimatorOut.block<3,1>(24 + 3 * i, 0);
 			//out.block<3, 1>(0, i) = estimatorOut.block<3, 1>(12 + 3 * i, 0);
+		}
+		return out;
+	}
+
+	inline Eigen::Matrix<double, 3, 4> getEstFeetVelB() override
+	{
+		Eigen::Matrix<double, 3, 4> out;
+		for (int i = 0; i < 4; i++)
+		{
+			out.block<3, 1>(0, i) = this->_Tsbi.block(0,0,3,3) * (estimatorOut.block<3, 1>(12 + 3 * i, 0) + estimatorOut.block<3, 1>(24 + 3 * i, 0));
 		}
 		return out;
 	}

@@ -142,12 +142,12 @@ void LegIkCal(JointS* _joint, EndS* _end, LegParamS* _para)
 	//std::cout << "theta: " << theta << std::endl;
 	double theta1 = 0;
 	double theta2 = 0;
-	if (_para->dir == 1)
+	if (_para->dir == -1)
 	{
 		theta1 = theta + acos((L * L + _para->L[0] * _para->L[0] - _para->L[1] * _para->L[1]) / (2 * _para->L[0] * L));
 		theta2 = acos((-L * L + _para->L[0] * _para->L[0] + _para->L[1] * _para->L[1]) / (2 * _para->L[0] * _para->L[1])) - 3.1415926;
 	}
-	else if (_para->dir == -1)
+	else if (_para->dir == 1)
 	{
 		theta1 = theta - acos((L * L + _para->L[0] * _para->L[0] - _para->L[1] * _para->L[1]) / (2 * _para->L[0] * L));
 		theta2 = 3.1415926 - acos((-L * L + _para->L[0] * _para->L[0] + _para->L[1] * _para->L[1]) / (2 * _para->L[0] * _para->L[1]));

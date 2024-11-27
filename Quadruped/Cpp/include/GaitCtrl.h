@@ -20,6 +20,7 @@ namespace Quadruped
 	public:
 		GaitCtrl(CtrlBase* _bc, LegCtrl* _lc[4], int timeStep, Eigen::Vector4d* _gaitPhase, Eigen::Vector4i* _gaitContact);
 		Eigen::Vector3d calFootPos(int legID, Eigen::Vector2d vxyTargetGlobal, double dYawTarget, double phase);
+		Eigen::Vector3d calFootPosW(int legID, Eigen::Vector2d vxyTargetGlobal, double dYawTarget, double phase);
 		void initExpectK(Eigen::Vector3d _k);// 初始化期望运动控制参数
 		void initSwingParams(double _period, double _stancePhaseRatio, Eigen::Vector4d _bias, double _t);// 初始化摆动相关参数
 		void calcWave(Eigen::Vector4d& phase, Eigen::Vector4i& contact, WaveStatus status, double _t);
@@ -46,6 +47,7 @@ namespace Quadruped
 		double yaw, dYaw, nextYaw;
 		double Tstance, Tswing;
 		double kx, ky, kyaw;
+		Eigen::Vector3d initLeg[4];
 		// 接触状态与摆动状态检测
 		double period;// 步态周期p
 		double stRatio;// 触地系数r(归一化)
@@ -83,8 +85,9 @@ namespace Quadruped
 		for (int i = 0; i < 4; i++)
 		{
 			this->legController[i] = _lc[i];
+			initLeg[i].setZero();
 		}
-		Eigen::Vector2d initLeg[4];
+		
 		initLeg[RB](0) = bodyController->bodyObject->initRbLegXYPosition(0);
 		initLeg[RB](1) = bodyController->bodyObject->initRbLegXYPosition(1);
 		initLeg[LB](0) = bodyController->bodyObject->initRbLegXYPosition(0);
@@ -146,6 +149,44 @@ namespace Quadruped
 		return footPos;
 	}
 
+	/*Eigen::Vector3d GaitCtrl::calFootPosW(int legID, Eigen::Vector2d vxyTargetGlobal, double dYawTarget, double phase)
+	{
+		Eigen::Vector3d vg = bodyController->bodyObject->est->getEstBodyVelS() - bodyController->bodyObject->est->getEstFootVelS();
+		Eigen::Vector3d vsh = bodyController->bodyObject->v3_to_m3(bodyController->currentBalanceState.r_dot) * (bodyController->bodyObject->Rsb_c * initLeg[legID]);
+		nextStep = 0.5 * Tstance * (vg + vsh) + kx * (vg - Eigen::Vector3d(vxyTargetGlobal(0), vxyTargetGlobal(1), 0)) + kyaw * vsh;
+		nextStep += bodyController->bodyObject->v3_to_m3(0.5 * gaitHeight / 9.81 * bodyController->bodyObject->est->getEstBodyVelS()) * Eigen::Vector3d(0, 0, dYawTarget);
+		yaw = bodyController->currentBalanceState.r(2);
+		nextStep(0) += feetRadius(legID) * cos(yaw + feetInitAngle(legID));
+		nextStep(1) += feetRadius(legID) * sin(yaw + feetInitAngle(legID));
+		footPos = bodyController->currentBalanceState.p + nextStep;
+		footPos(2) = 0.0;
+		return footPos;
+	}*/
+
+	Eigen::Vector3d GaitCtrl::calFootPosW(int legID, Eigen::Vector2d vxyTargetGlobal, double dYawTarget, double phase)
+	{
+		// 计算xy平面的落脚点规划
+		bodyVelGlobal = bodyController->currentBalanceState.p_dot - bodyController->bodyObject->est->getEstFootVelS();
+		bodyWGlobal = bodyController->currentBalanceState.r_dot;
+
+		nextStep(0) = bodyVelGlobal(0) * (1 - phase) * Tswing + bodyVelGlobal(0) * Tstance / 2 + kx * (vxyTargetGlobal(0) - bodyVelGlobal(0));
+		nextStep(1) = bodyVelGlobal(1) * (1 - phase) * Tswing + bodyVelGlobal(1) * Tstance / 2 + ky * (vxyTargetGlobal(1) - bodyVelGlobal(1));
+		nextStep(2) = 0;
+
+		// 计算旋转状态的落脚点叠加规划
+		yaw = bodyController->currentBalanceState.r(2);
+		dYaw = bodyController->currentBalanceState.r_dot(2);
+		nextYaw = dYaw * (1 - phase) * Tswing + dYaw * Tstance / 2 + kyaw * (dYawTarget - dYaw);
+
+		nextStep(0) += feetRadius(legID) * cos(yaw + feetInitAngle(legID) + nextYaw);
+		nextStep(1) += feetRadius(legID) * sin(yaw + feetInitAngle(legID) + nextYaw);
+
+		footPos = bodyController->currentBalanceState.p + nextStep;
+		footPos(2) = 0.0;
+
+		return footPos;
+	}
+
 	void GaitCtrl::calcWave(Eigen::Vector4d& phase, Eigen::Vector4i& contact, WaveStatus status, double _t)
 	{
 		if (status == WaveStatus::WAVE_ALL)
@@ -153,15 +194,18 @@ namespace Quadruped
 			passT = _t - startT;
 			for (int i(0); i < 4; ++i)
 			{
+				// 得到总的步态周期相位
 				normalT(i) = fmod(passT + period - period * bias(i), period) / period;// 取余操作并归一化
 				// 根据归一化的T判断应该是接触地面还是摆动
 				if (normalT(i) < stRatio)
 				{
+					// 计算触地过程中的相位变化0-1
 					contact(i) = 1;
 					phase(i) = normalT(i) / stRatio;
 				}
 				else
 				{
+					// 计算非触地过程中的相位变化0-1
 					contact(i) = 0;
 					phase(i) = (normalT(i) - stRatio) / (1 - stRatio);
 				}
@@ -191,15 +235,15 @@ namespace Quadruped
 				switchStatus.setOnes();
 			}
 			calcWave(phasePast, contactPast, statusPast, _t);
-			//// 两种情况，分别是从完全站立到全摆动，以及全摆动到完全站立
-			//if ((status == WaveStatus::STANCE_ALL) && (statusPast == WaveStatus::SWING_ALL))
-			//{
-			//	contactPast.setOnes();
-			//}
-			//else if ((status == WaveStatus::SWING_ALL) && (statusPast == WaveStatus::STANCE_ALL))
-			//{
-			//	contactPast.setZero();
-			//}
+			// 两种情况，分别是从完全站立到全摆动，以及全摆动到完全站立
+			if ((status == WaveStatus::STANCE_ALL) && (statusPast == WaveStatus::SWING_ALL))
+			{
+				contactPast.setOnes();
+			}
+			else if ((status == WaveStatus::SWING_ALL) && (statusPast == WaveStatus::STANCE_ALL))
+			{
+				contactPast.setZero();
+			}
 		}
 
 		// 如果切换状态为允许
@@ -273,7 +317,7 @@ namespace Quadruped
 				_feetVel.col(i).setZero();
 			}
 			else {
-				endP.col(i) = calFootPos(i, VxyTarget, dYawTarget, (*gaitPhase)(i));
+				endP.col(i) = calFootPosW(i, VxyTarget, dYawTarget, (*gaitPhase)(i));
 
 				_feetPos.col(i) = getFootPos(i);
 				_feetVel.col(i) = getFootVel(i);

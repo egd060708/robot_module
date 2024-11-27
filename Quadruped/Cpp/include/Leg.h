@@ -94,7 +94,7 @@ namespace Quadruped
                 this->Mc[i] = _mc[i];
                 this->Ic[i] = _ic[i];
             }
-            
+            Reff = L4 + L4b;
         }
         void updateJointAng(Vector4d _jAngle);          // 更新各关节观测角度
         void updateJointVel(Vector4d _jVel);            // 更新关节观测角速度

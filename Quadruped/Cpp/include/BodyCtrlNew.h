@@ -336,7 +336,7 @@ namespace Quadruped
             x.resize(10);
 
             dynamicRight.setZero();
-            dynamicRight.block(6, 6, 4, 4) = (bodyObject->legs[0]->Ic[3](1) / pow(bodyObject->legs[0]->L4 + bodyObject->legs[0]->L4b, 2) + bodyObject->legs[0]->Mc[3]) * Matrix4d::Identity();
+            //dynamicRight.block(6, 6, 4, 4) = (bodyObject->legs[0]->Ic[3](1) / pow(bodyObject->legs[0]->L4 + bodyObject->legs[0]->L4b, 2) + bodyObject->legs[0]->Mc[3]) * Matrix4d::Identity();
             dynamicLeft.setZero();
             dynamicLeft.block<3, 3>(0, 0).setIdentity();
             dynamicLeft.block<3, 3>(0, 3).setIdentity();
@@ -346,7 +346,12 @@ namespace Quadruped
             dynamicLeft(7, 3) = -1;
             dynamicLeft(8, 6) = -1;
             dynamicLeft(9, 9) = -1;
-            dynamicLeft.block(6, 12, 4, 4) = (1. / (bodyObject->legs[0]->L4 + bodyObject->legs[0]->L4b)) * Matrix4d::Identity();
+            //dynamicLeft.block(6, 12, 4, 4) = (1. / (bodyObject->legs[0]->L4 + bodyObject->legs[0]->L4b)) * Matrix4d::Identity();
+            for (int i = 0; i < 4; i++)
+            {
+                dynamicRight(6 + i, 6 + i) = bodyObject->legs[i]->Ic[3](1) / pow(bodyObject->legs[i]->Reff, 2) + bodyObject->legs[i]->Mc[3];
+                dynamicLeft(6 + i, 12 + i) = 1. / bodyObject->legs[i]->Reff;
+            }
             mpcOut.setZero();
             A.setZero();
             B.setZero();
@@ -392,14 +397,21 @@ namespace Quadruped
     {
         for (int i = 0; i < 4; i++)
         {
+            // 四足接触点位置反对称矩阵的计算
             //dynamicLeft.block<3, 3>(0, i * 3) = Rsb_c;
             Vector3d Pbi = Vector3d::Zero();
             Pbi = bodyObject->Rsb_c * (bodyObject->currentBodyState.leg_b[i].Position - bodyObject->P);
             //Pbi = (currentBodyState.leg_b[i].Position - Pb);
             dynamicLeft.block<3, 3>(3, i * 3) = bodyObject->v3_to_m3(Pbi);
+
+            // 轮相关物理参数更新
+            dynamicRight(6 + i, 6 + i) = bodyObject->legs[i]->Ic[3](1) / pow(bodyObject->legs[i]->Reff, 2) + bodyObject->legs[i]->Mc[3];
+            dynamicLeft(6 + i, 12 + i) = 1. / bodyObject->legs[i]->Reff;
         }
         dynamicRight.block<3, 3>(0, 0) = bodyObject->M;
         dynamicRight.block<3, 3>(3, 3) = bodyObject->Rsb_c * bodyObject->I * bodyObject->Rsb_c.transpose();
+        
+        // 为了减少计算量，轮速规划是基于车体坐标系的，因此要对世界坐标系的力做映射
         Eigen::Matrix<double, 4, 3> s = Eigen::Matrix<double, 4, 3>::Zero();
         s(0,0) = -1;
         dynamicLeft.block(6, 0, 4, 3) = s * bodyObject->Rsb_c.transpose();
@@ -449,7 +461,8 @@ namespace Quadruped
         currentBalanceState.r_dot = bodyObject->currentWorldState.angVel_xyz;
         for (int i = 0; i < 4; i++)
         {
-            /*currentBalanceState.pe(i) = bodyObject->est->getEstFeetPosS(i)(0);*/
+            /*currentBalanceState.pe(i) = bodyObject->est->getEstFeetPosB(i)(0);
+            currentBalanceState.pe_dot(i) = bodyObject->est->getEstFeetVelB(i)(0);*/
             currentBalanceState.pe(i) = bodyObject->currentBodyState.leg_b[i].Position(0);
             currentBalanceState.pe_dot(i) = bodyObject->currentBodyState.leg_b[i].VelocityW(0);
         }
