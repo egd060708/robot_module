@@ -38,12 +38,16 @@ void LegVirtualVMC(LegS* _leg, Leg_Ctrl_Param* _p)
 	}
 	/*printV("tarF", _leg->targetEnd.Force, 3);*/
 	// 雅可比矩阵转换为输出力矩
+	LegJacobiCal(_leg, &_leg->currentJoint);
 	LegInvJacobiCal(_leg, &_leg->currentJoint);
+	/*print3M("J", _leg->jacobi);
+	print3M("JT", _leg->jacobiT);
+	print3M("JI", _leg->jacobiI);*/
 	// 力矩转化成舵机角速度，并更新到期望关节角度
 	double W3d[3] = {0};
 	for (int j = 0; j < 3; j++)
 	{
-		_leg->targetJoint.Torque[j] = dot_v3d_v3d(_leg->jacobiI[j], _leg->targetEnd.Force);
+		_leg->targetJoint.Torque[j] = dot_v3d_v3d(_leg->jacobiT[j], _leg->targetEnd.Force);
 		W3d[j] = _p->kp_t[j] * _leg->targetJoint.Torque[j];
 		_leg->targetJoint.Angle[j] += W3d[j] * _p->ctrl_period;
 	}

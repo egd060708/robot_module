@@ -214,7 +214,8 @@ namespace Quadruped
     void Leg::setTargetLegForce(Vector3d _lForce)
     {
         targetLeg.Force = _lForce;
-        targetJoint.Torque = jacobi.inverse() * targetLeg.Force;
+        //targetJoint.Torque = jacobi.inverse() * targetLeg.Force;
+        targetJoint.Torque = jacobi.transpose() * targetLeg.Force;
     }
 
     void Leg::setTargetEndTau(double _eTau)

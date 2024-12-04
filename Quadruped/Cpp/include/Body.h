@@ -56,6 +56,9 @@ namespace Quadruped
 
         double Mb[3] = {};      // 机器人机体质量(包括头部，中段和尾部)
         Vector<double, 6> Ib[3] = {};    // 机器人单刚体动力学机身转动惯量
+        Matrix3d Mbm = Matrix3d::Zero();
+        Matrix3d Ibm = Matrix3d::Zero();
+        Vector3d Pbm = Vector3d::Zero();
         Vector3d Pb[3] = {};    // 机器人重心在机身坐标系下的位置
         Matrix3d M = Matrix3d::Zero(); // 机器人总质量
         Matrix3d I = Matrix3d::Zero(); // 机器人总惯量
@@ -265,6 +268,24 @@ namespace Quadruped
         double _M = 0;
         Vector3d _P = Vector3d::Zero();
         Vector<double, 6> _I = Vector<double, 6>::Zero();
+        for (int i = 0; i < 3; i++)
+        {
+            _M += this->Mb[i];
+            _P += this->Mb[i] * this->Pb[i];
+        }
+
+        /* 只考虑机身单刚体 */
+        this->Pbm = _P / _M;// 只包含机身的的重心位置
+        this->Mbm = _M * Matrix3d::Identity();// 只包含机身的重量
+        // 只包含机身的惯量
+        Vector<double, 6> _Ibm = Vector<double, 6>::Zero();
+        for (int i = 0; i < 3; i++)
+        {
+            _Ibm += parallelAxis(this->Pbm, Pb[i], Ib[i], Mb[i]);
+        }
+        this->Ibm = aI2mI(_Ibm);
+
+        /* 考虑全身 */
         for (int i = 0; i < 4; i++)
         {
             for (int j = 0; j < 4; j++)
@@ -273,22 +294,17 @@ namespace Quadruped
                 _P += this->legs[i]->Mc[j] * (this->legs[i]->Pcl[j] + this->leg2body[i]);
             }
         }
+        _P = _P / _M;// 计算整机重心位置
         for (int i = 0; i < 3; i++)
         {
-            _M += this->Mb[i];
-            _P += this->Mb[i] * this->Pb[i];
+            _I += parallelAxis(_P, Pb[i], Ib[i], Mb[i]);
         }
-        _P = _P / _M;// 计算整机重心位置
         for (int i = 0; i < 4; i++)
         {
             for (int j = 0; j < 4; j++)
             {
                 _I += parallelAxis(_P, this->legs[i]->Pcl[j] + this->leg2body[i], this->legs[i]->Ic[j], this->legs[i]->Mc[j]);
             }
-        }
-        for (int i = 0; i < 3; i++)
-        {
-            _I += parallelAxis(_P, Pb[i], Ib[i], Mb[i]);
         }
         // 得到整机刚体参数
         this->P = _P;

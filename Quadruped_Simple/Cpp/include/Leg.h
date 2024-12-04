@@ -41,6 +41,7 @@ typedef struct _LegS
     JointS targetJoint;
     JointS currentJoint;
     double jacobi[3][3];
+    double jacobiT[3][3];
     double jacobiI[3][3];
 }LegS;
 

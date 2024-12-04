@@ -1,6 +1,7 @@
 #include "Leg.h"
 #include <math.h>
 #include <iostream>
+#include "mathTool.h"
 
 /* 初始化腿参数 */
 void InitLeg(LegS* _leg, double* _links, double _ratio, int _dir)
@@ -47,9 +48,11 @@ void LegJacobiCal(LegS* _leg, JointS* _joint)
 	double s12 = sin(_joint->Angle[0] + _joint->Angle[1]);
 	double c12 = cos(_joint->Angle[0] + _joint->Angle[1]);
 	_leg->jacobi[0][0] = -_leg->legPara.L[0] * c1 - _leg->legPara.L[1] * c12;
-	_leg->jacobi[0][2] = -_leg->legPara.L[1] * c12;
-	_leg->jacobi[1][0] = _leg->legPara.L[0] * s1 + _leg->legPara.L[1] * s12;
-	_leg->jacobi[1][2] = _leg->legPara.L[1] * s12;
+	_leg->jacobi[0][1] = -_leg->legPara.L[1] * c12;
+	_leg->jacobi[2][0] = _leg->legPara.L[0] * s1 + _leg->legPara.L[1] * s12;
+	_leg->jacobi[2][1] = _leg->legPara.L[1] * s12;
+	m3d_transpose2(_leg->jacobiT, _leg->jacobi);
+	
 #endif
 }
 
@@ -94,8 +97,8 @@ void LegInvJacobiCal(LegS* _leg, JointS* _joint)
 	double k2 = l1 * c12 * s1 - l1 * s12 * c1;
 	_leg->jacobiI[0][0] = s12 / k2;
 	_leg->jacobiI[0][2] = c12 / k2;
-	_leg->jacobiI[1][0] = (l2 * s12 + l1 * s1) / k1;
-	_leg->jacobiI[1][2] = (l2 * c12 + l1 * c1) / k1;
+	_leg->jacobiI[2][0] = (l2 * s12 + l1 * s1) / k1;
+	_leg->jacobiI[2][2] = (l2 * c12 + l1 * c1) / k1;
 #endif
 }
 

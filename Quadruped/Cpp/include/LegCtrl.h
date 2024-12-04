@@ -73,12 +73,12 @@ namespace Quadruped
         jPidParams[2] << 16, -0.6, 30;
         loadPidParams(jPid, jPidParams);
 
-        lPid_pvParams[0] << 40, 100;
-        lPid_pvParams[1] << 1, 100;
-        lPid_pvParams[2] << 60, 100;
-        lPid_pvParams[3] << 1.2, 100;
-        lPid_pvParams[4] << 80, 100;
-        lPid_pvParams[5] << 2, 100;
+        lPid_pvParams[0] << 3000, 100;
+        lPid_pvParams[1] << 50, 100;
+        lPid_pvParams[2] << 3000, 100;
+        lPid_pvParams[3] << 50, 100;
+        lPid_pvParams[4] << 3000, 100;
+        lPid_pvParams[5] << 50, 100;
         loadPid_pvParams(lPid_pv, lPid_pvParams);
 
     }
