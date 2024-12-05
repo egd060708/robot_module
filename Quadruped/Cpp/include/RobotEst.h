@@ -398,7 +398,7 @@ public:
 			-147.211, 58.082, 302.120;
 		// 过程协方差
 		_QInit = _Qdig.asDiagonal();
-		_QInit += _B * _Cu * _B.transpose();// 把加速度计的协方差矩阵嵌入过程协方差矩阵中
+		//_QInit += _B * _Cu * _B.transpose();// 把加速度计的协方差矩阵嵌入过程协方差矩阵中
 		_RInit = _Rdig.asDiagonal();
 
 		estimator.setConv(_QInit, _RInit, _largeVariance * _P);// 初始化一个比较大的预测协方差矩阵
@@ -483,7 +483,7 @@ public:
 	inline Eigen::Vector3d getEstFeetVelB(int id) override
 	{
 		Eigen::Vector3d out;
-		out = this->_Tsbi.block(0,0,3,3) * (/*estimatorOut.block<3, 1>(12 + 3 * id, 0) + */estimatorOut.block<3, 1>(24 + 3 * id, 0));
+		out = this->_Tsbi.block(0,0,3,3) * (estimatorOut.block<3, 1>(12 + 3 * id, 0) + estimatorOut.block<3, 1>(24 + 3 * id, 0));
 		return out;
 	}
 
@@ -498,7 +498,7 @@ public:
 			trans = this->_Tsb * trans;
 			out.block<3, 1>(0, i) = trans.block(0,0,3,1);*/
 
-			out.block(0, 0, 3, 1) = estimatorState.block<3, 1>(12 + 3 * i, 0);
+			out.block(0, i, 3, 1) = estimatorState.block<3, 1>(12 + 3 * i, 0);
 		}
 		return out;
 	}

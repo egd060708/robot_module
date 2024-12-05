@@ -3,6 +3,7 @@
 #include <Eigen/Dense>
 #include "math.h"
 #include <iostream>
+#include "SecondButterworthLPF.h"
 
 using namespace Eigen;
 
@@ -45,6 +46,7 @@ namespace Quadruped
         Vector3d Pcl[4];// 所有连杆的质心相对单腿系的位置
         Vector<double, 6> Ic[4];// 所有连杆质心的惯性张量矩阵简化形式
         double Mc[4];// 所有连杆质量
+        LPF_SecondOrder_Classdef enVelF[4] = { LPF_SecondOrder_Classdef(50,500),LPF_SecondOrder_Classdef(50,500),LPF_SecondOrder_Classdef(50,500),LPF_SecondOrder_Classdef(50,500) };
 
     public:
         Leg(double _l[7], Vector3d _pcj[4], double _mc[4], Vector<double, 6> _ic[4], int idx) {
@@ -66,8 +68,12 @@ namespace Quadruped
             L4b = _l[6];
             for (int i = 0; i < 4; i++)
             {
-                switch (idx) 
+                this->Mc[i] = _mc[i];
+                this->Ic[i] = _ic[i];
+                if (i == 0)
                 {
+                    switch (idx)
+                    {
                     case 0:
                         Pcj[i](0) = _pcj[i](0);
                         Pcj[i](1) = _pcj[i](1);
@@ -77,22 +83,59 @@ namespace Quadruped
                         Pcj[i](0) = _pcj[i](0);
                         Pcj[i](1) = -_pcj[i](1);
                         Pcj[i](2) = _pcj[i](2);
+                        Ic[i](3) = -Ic[i](3);
+                        Ic[i](5) = -Ic[i](5);
                         break;
                     case 2:
                         Pcj[i](0) = -_pcj[i](0);
                         Pcj[i](1) = _pcj[i](1);
                         Pcj[i](2) = _pcj[i](2);
+                        Ic[i](3) = -Ic[i](3);
+                        Ic[i](4) = -Ic[i](4);
                         break;
                     case 3:
                         Pcj[i](0) = -_pcj[i](0);
                         Pcj[i](1) = -_pcj[i](1);
                         Pcj[i](2) = _pcj[i](2);
+                        Ic[i](4) = -Ic[i](4);
+                        Ic[i](5) = -Ic[i](5);
                         break;
                     default:
                         break;
+                    }
                 }
-                this->Mc[i] = _mc[i];
-                this->Ic[i] = _ic[i];
+                else
+                {
+                    switch (idx)
+                    {
+                    case 0:
+                        Pcj[i](0) = _pcj[i](0);
+                        Pcj[i](1) = _pcj[i](1);
+                        Pcj[i](2) = _pcj[i](2);
+                        break;
+                    case 1:
+                        Pcj[i](0) = _pcj[i](0);
+                        Pcj[i](1) = -_pcj[i](1);
+                        Pcj[i](2) = _pcj[i](2);
+                        Ic[i](3) = -Ic[i](3);
+                        Ic[i](5) = -Ic[i](5);
+                        break;
+                    case 2:
+                        Pcj[i](0) = _pcj[i](0);
+                        Pcj[i](1) = _pcj[i](1);
+                        Pcj[i](2) = _pcj[i](2);
+                        break;
+                    case 3:
+                        Pcj[i](0) = _pcj[i](0);
+                        Pcj[i](1) = -_pcj[i](1);
+                        Pcj[i](2) = _pcj[i](2);
+                        Ic[i](3) = -Ic[i](3);
+                        Ic[i](5) = -Ic[i](5);
+                        break;
+                    default:
+                        break;
+                    }
+                }
             }
             Reff = L4 + L4b;
         }
@@ -125,6 +168,10 @@ namespace Quadruped
     {
         currentJoint.Velocity = _jVel.block(0, 0, 3, 1);
         currentJoint.Foot_Velocity = _jVel(3);
+        /*currentJoint.Velocity(0) = enVelF[0].f(_jVel(0));
+        currentJoint.Velocity(1) = enVelF[1].f(_jVel(1));
+        currentJoint.Velocity(2) = enVelF[2].f(_jVel(2));*/
+        //currentJoint.Foot_Velocity = enVelF[3].f(_jVel(3));
     }
 
     void Leg::updateJointTau(Vector4d _jTorque)
@@ -141,6 +188,9 @@ namespace Quadruped
     void Leg::updateJointVel(Vector3d _jVel)
     {
         currentJoint.Velocity = _jVel;
+        /*currentJoint.Velocity(0) = enVelF[0].f(_jVel(0));
+        currentJoint.Velocity(1) = enVelF[1].f(_jVel(1));
+        currentJoint.Velocity(2) = enVelF[2].f(_jVel(2));*/
     }
 
     void Leg::updateJointTau(Vector3d _jTorque)
@@ -179,7 +229,7 @@ namespace Quadruped
         // 雅可比矩阵完成从关节速度到末端速度的映射
         currentLeg.Velocity = jacobi * currentJoint.Velocity;
         // 雅可比矩阵完成从当前关节力矩到当前末端虚拟力的映射
-        currentLeg.Force = jacobi * currentJoint.Torque;
+        currentLeg.Force = jacobi.transpose().inverse() * currentJoint.Torque;
     }
 
     void Leg::legFK_Cal(const Vector3d& _imu, const Vector3d& _gyro)
@@ -194,11 +244,12 @@ namespace Quadruped
         currentLeg.Velocity = jacobi * currentJoint.Velocity;
         // 接触点转动牵连速度
         currentLeg.VelocityW << Reff * (_gyro(1) * cos(currentJoint.Angle(0)) + currentJoint.Velocity(1) + currentJoint.Velocity(2) + currentJoint.Foot_Velocity), L4b* (_gyro(0) + currentJoint.Velocity(0)), 0;
+        //currentLeg.VelocityW << Reff * (currentJoint.Foot_Velocity), 0, 0;
         //std::cout << "currentLeg.Vel: \n" << currentLeg.VelocityW << std::endl;
         // 得到总的接触速度
         currentLeg.VelocityG = currentLeg.Velocity + currentLeg.VelocityW;
         // 雅可比矩阵完成从当前关节力矩到当前末端虚拟力的映射
-        currentLeg.Force = jacobi * currentJoint.Torque;
+        currentLeg.Force = jacobi.transpose().inverse() * currentJoint.Torque;
     }
 
     void Leg::setTargetLegPositon(Vector3d _lPosition)

@@ -237,6 +237,8 @@ namespace Quadruped
             this->cA.block<5, 3>(5 * i, 3 * i) = _cA;
             this->Aub.block<5, 1>(5 * i, 0) = _Aub;
         }
+        lb.setConstant(-force_c);
+        ub.setConstant(force_c);
     }
 
     void QpPIDVCtrl::mpc_adjust(const VectorX<bool>& _enList)
@@ -308,6 +310,8 @@ namespace Quadruped
         double u = 0.8;// 摩擦系数
         double force_c = 200;// 输出限制
         Eigen::Vector3d g = Eigen::Vector3d(0, 0, -9.81);
+        PIDmethod wheelPID[4];
+        Eigen::Vector4d wheelTau;
 
         // 构造函数
         QpPVCtrl(Body* _obj, LegCtrl* _legsCtrl[4], int timeStep) :CtrlBase(_obj, _legsCtrl, timeStep)
@@ -365,24 +369,32 @@ namespace Quadruped
         void setVelocityTarget(const Vector3d& _p_dot, const Vector3d& _r_dot);
         // 执行mpc控制器
         void mpc_adjust(const VectorX<bool>& _enList) override;
+        // 执行轮速控制器
+        void wheel_adjust(const Vector4d& _p, const Vector4d& _p_dot);
         // 设置腿部接触约束
         void setContactConstrain(const Vector4i& _contact);
         // 直接设置四足输出
         void setLegsForce(const Eigen::Matrix<double, 3, 4>& _force);
+        void setLegsForce(const Eigen::Matrix<double, 3, 4>& _force, const Eigen::Vector4d& _tau);
     };
 
     void QpPVCtrl::updateDynamic()
     {
+        /*Eigen::Vector3d simpleP = 0.1 * bodyObject->P;
+        Eigen::Matrix3d simpleI = Eigen::Vector3d(bodyObject->I(0, 0), bodyObject->I(1, 1), bodyObject->I(2, 2)).asDiagonal();*/
         for (int i = 0; i < 4; i++)
         {
-            //dynamicLeft.block<3, 3>(0, i * 3) = Rsb_c;
             Vector3d Pbi = Vector3d::Zero();
             Pbi = bodyObject->Rsb_c * (bodyObject->currentBodyState.leg_b[i].Position - bodyObject->P);
-            //Pbi = (currentBodyState.leg_b[i].Position - Pb);
+            //Pbi = bodyObject->Rsb_c * (bodyObject->currentBodyState.leg_b[i].Position - simpleP);
             dynamicLeft.block<3, 3>(3, i * 3) = bodyObject->v3_to_m3(Pbi);
         }
         dynamicRight.block<3, 3>(0, 0) = bodyObject->M;
         dynamicRight.block<3, 3>(3, 3) = bodyObject->Rsb_c * bodyObject->I * bodyObject->Rsb_c.transpose();
+        //dynamicRight.block<3, 3>(3, 3) = bodyObject->Rsb_c * simpleI * bodyObject->Rsb_c.transpose();
+        /*std::cout << "M:" << bodyObject->M << std::endl;
+        std::cout << "I:" << simpleI << std::endl;
+        std::cout << "P:" << simpleP << std::endl;*/
     }
 
     void QpPVCtrl::importWeight(const VectorXd& _Q, const VectorXd& _F, const VectorXd& _R, const VectorXd& _W)
@@ -444,6 +456,8 @@ namespace Quadruped
             this->cA.block<5, 3>(5 * i, 3 * i) = _cA;
             this->Aub.block<5, 1>(5 * i, 0) = _Aub;
         }
+        lb.setConstant(-force_c);
+        ub.setConstant(force_c);
     }
 
     void QpPVCtrl::mpc_adjust(const VectorX<bool>& _enList)
@@ -465,9 +479,9 @@ namespace Quadruped
         x.block<3, 1>(6, 0) = currentBalanceState.p_dot;
         x.block<3, 1>(9, 0) = currentBalanceState.r_dot;
         x.block<3, 1>(12, 0) = g;
-        /*std::cout << "targetP: " << targetBalanceState.p << std::endl;
+        std::cout << "targetP: " << targetBalanceState.p << std::endl;
         std::cout << "currenP: " << currentBalanceState.p << std::endl;
-        std::cout << "targetPdot: " << targetBalanceState.p_dot << std::endl;
+        /*std::cout << "targetPdot: " << targetBalanceState.p_dot << std::endl;
         std::cout << "currenPdot: " << currentBalanceState.p_dot << std::endl;*/
         /*std::cout << "targetR: " << targetBalanceState.r << std::endl;
         std::cout << "currenR: " << currentBalanceState.r << std::endl;
@@ -483,11 +497,32 @@ namespace Quadruped
         }
     }
 
+    void QpPVCtrl::wheel_adjust(const Vector4d& _p, const Vector4d& _p_dot)
+    {
+        for (int i = 0; i < 4; i++)
+        {
+            wheelPID[i].Params_Config(200, 0., -0.2, 0.5, 20, -20);
+            wheelPID[i].target = _p(i);
+            wheelPID[i].current = bodyObject->currentBodyState.leg_b[i].Position(0);
+            double feedforward = (bodyObject->Rsb_c.transpose() * balanceController.getOutput().block<3, 1>(3 * i, 0))(0) * bodyObject->legs[i]->Reff;
+            wheelTau(i) = feedforward + wheelPID[i].Adjust(0, bodyObject->currentBodyState.leg_b[i].VelocityW(0));
+        }
+    }
+
     void QpPVCtrl::setLegsForce(const Eigen::Matrix<double, 3, 4>& _force)
     {
         for (int i = 0; i < 4; i++)
         {
             this->legsCtrl[i]->setEndForceTar(_force.col(i));
+        }
+    }
+
+    void QpPVCtrl::setLegsForce(const Eigen::Matrix<double, 3, 4>& _force, const Eigen::Vector4d& _tau)
+    {
+        for (int i = 0; i < 4; i++)
+        {
+            this->legsCtrl[i]->setEndForceTar(_force.col(i));
+            this->legsCtrl[i]->setEndTauTar(_tau(i));
         }
     }
 
@@ -767,6 +802,10 @@ namespace Quadruped
             this->cA.block<5, 3>(5 * i, 3 * i) = _cA;
             this->Aub.block<5, 1>(5 * i, 0) = _Aub;
         }
+        lb.block(0, 0, 12, 1).setConstant(-force_c);
+        ub.block(0, 0, 12, 1).setConstant(force_c);
+        lb.block(12, 0, 4, 1).setConstant(-tau_c);
+        ub.block(12, 0, 4, 1).setConstant(tau_c);
     }
 
     void QpwPIDVCtrl::setLegsForce(const Eigen::Matrix<double, 3, 4>& _force, const Eigen::Vector4d& _tau)
@@ -786,9 +825,12 @@ namespace Quadruped
         // 机器人平衡控制器
         mpcCal<23, 16, 20, 1, 5> balanceController;
         double u = 1;// 摩擦系数
-        double force_c = 200;// 输出力限制限制
+        double force_c = 1000;// 输出力限制限制
         double tau_c = 20; // 输出力矩限制
         Eigen::Vector3d g = Eigen::Vector3d(0, 0, -9.81);
+
+        // 用于轮速控制的pid
+        PIDmethod wheelPID[4];
 
         // 构造函数
         QpwPVCtrl(Body* _obj, LegCtrl* _legsCtrl[4], int timeStep) :CtrlBase(_obj, _legsCtrl, timeStep)
@@ -848,6 +890,11 @@ namespace Quadruped
             cA.block<5, 3>(15, 9) = _cA;
             Alb.setZero();
             Aub.setConstant(100000.);
+
+            for (int i = 0; i < 4; i++)
+            {
+                wheelPID[i].Params_Config(20, -0.2, 2, -2);
+            }
         }
 
         // 更新机器人动力学方程（描述为 left*[f] = right）
@@ -918,9 +965,12 @@ namespace Quadruped
 
     void QpwPVCtrl::updateBalanceState()
     {
+        static multiCircle angC = multiCircle(3.1415926);
         currentBalanceState.p = bodyObject->currentWorldState.dist;
         currentBalanceState.p_dot = bodyObject->currentWorldState.linVel_xyz;
-        currentBalanceState.r = bodyObject->currentBodyState.Ang_xyz;
+        currentBalanceState.r(0) = bodyObject->currentBodyState.Ang_xyz(0);
+        currentBalanceState.r(1) = bodyObject->currentBodyState.Ang_xyz(1);
+        currentBalanceState.r(2) = angC.f(bodyObject->currentBodyState.Ang_xyz(2));
         currentBalanceState.r_dot = bodyObject->currentWorldState.angVel_xyz;
         for (int i = 0; i < 4; i++)
         {
@@ -943,13 +993,22 @@ namespace Quadruped
     {
         targetBalanceState.p_dot = _p_dot;
         targetBalanceState.r_dot = _r_dot;
-        targetBalanceState.pe_dot = _pe_dot;
+        //targetBalanceState.pe_dot = _pe_dot;
     }
 
     void QpwPVCtrl::mpc_adjust(const VectorX<bool>& _enList)
     {
+        for (int i = 0; i < 4; i++)
+        {
+            wheelPID[i].target = targetBalanceState.pe(i);
+            wheelPID[i].current = currentBalanceState.pe(i);
+            //std::cout << "wpid: " << wheelPID[i].target << ", " << wheelPID[i].current << std::endl;
+            wheelPID[i].Adjust(0);
+            targetBalanceState.pe_dot(i) = wheelPID[i].out;
+        }
+
         A.block(0, 10, 3, 3) = Eigen::Matrix3d::Identity();
-        A.block(3, 13, 3, 3) = Eigen::Matrix3d::Identity();
+        A.block(3, 13, 3, 3) = bodyObject->Rsb_c.transpose();
         A.block(6, 16, 4, 4) = Eigen::Matrix4d::Identity();
         A.block(10, 20, 3, 3) = Eigen::Matrix3d::Identity();
         B.block(10,0,10,16) = dynamicRight.inverse() * dynamicLeft;
@@ -969,6 +1028,14 @@ namespace Quadruped
         x.block<3, 1>(13, 0) = currentBalanceState.r_dot;
         x.block<4, 1>(16, 0) = currentBalanceState.pe_dot;
         x.block<3, 1>(20, 0) = g;
+        /*std::cout << "targetP: " << targetBalanceState.p << std::endl;
+        std::cout << "currenP: " << currentBalanceState.p << std::endl;
+        std::cout << "targetPdot: " << targetBalanceState.p_dot << std::endl;
+        std::cout << "currenPdot: " << currentBalanceState.p_dot << std::endl;*/
+        /*std::cout << "targetR: " << targetBalanceState.r << std::endl;
+        std::cout << "currenR: " << currentBalanceState.r << std::endl;
+        std::cout << "targetRdot: " << targetBalanceState.r_dot << std::endl;
+        std::cout << "currenRdot: " << currentBalanceState.r_dot << std::endl;*/
         balanceController.mpc_update(y, x, 100, 0.002);
         balanceController.mpc_init(A, B, Q, F, R, W, dt);
         balanceController.mpc_solve();
@@ -1002,6 +1069,10 @@ namespace Quadruped
             this->cA.block<5, 3>(5 * i, 3 * i) = _cA;
             this->Aub.block<5, 1>(5 * i, 0) = _Aub;
         }
+        lb.block(0, 0, 12, 1).setConstant(-force_c);
+        ub.block(0, 0, 12, 1).setConstant(force_c);
+        lb.block(12, 0, 4, 1).setConstant(-tau_c);
+        ub.block(12, 0, 4, 1).setConstant(tau_c);
     }
 
     void QpwPVCtrl::setLegsForce(const Eigen::Matrix<double, 3, 4>& _force, const Eigen::Vector4d& _tau)
