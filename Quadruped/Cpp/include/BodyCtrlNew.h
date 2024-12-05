@@ -70,7 +70,7 @@ namespace Quadruped
             {
                 this->legsCtrl[i] = _legsCtrl[i];
             }
-            this->dt = static_cast<double>(timeStep) * 0.001;
+            this->dt = static_cast<double>(timeStep) * 0.005;
         }
         // 导入权重参数
         virtual void importWeight(const VectorXd& _Q, const VectorXd& _F, const VectorXd& _R, const VectorXd& _W) = 0;
@@ -87,7 +87,7 @@ namespace Quadruped
 
     public:
         // 机器人平衡控制器
-        mpcCal<6, 12, 20, 1, 5> balanceController;
+        mpcCal<6, 12, 20, 1, 10> balanceController;
         double u = 2;// 摩擦系数
         double force_c = 200;// 输出限制
 
@@ -479,15 +479,15 @@ namespace Quadruped
         x.block<3, 1>(6, 0) = currentBalanceState.p_dot;
         x.block<3, 1>(9, 0) = currentBalanceState.r_dot;
         x.block<3, 1>(12, 0) = g;
-        std::cout << "targetP: " << targetBalanceState.p << std::endl;
-        std::cout << "currenP: " << currentBalanceState.p << std::endl;
+        /*std::cout << "targetP: " << targetBalanceState.p << std::endl;
+        std::cout << "currenP: " << currentBalanceState.p << std::endl;*/
         /*std::cout << "targetPdot: " << targetBalanceState.p_dot << std::endl;
         std::cout << "currenPdot: " << currentBalanceState.p_dot << std::endl;*/
         /*std::cout << "targetR: " << targetBalanceState.r << std::endl;
         std::cout << "currenR: " << currentBalanceState.r << std::endl;
         std::cout << "targetRdot: " << targetBalanceState.r_dot << std::endl;
         std::cout << "currenRdot: " << currentBalanceState.r_dot << std::endl;*/
-        balanceController.mpc_update(y, x, 100, 0.002);
+        balanceController.mpc_update(y, x, 100, 0.02);
         balanceController.mpc_init(A, B, Q, F, R, W, dt);
         balanceController.mpc_solve();
         for (int i = 0; i < 4; i++)
