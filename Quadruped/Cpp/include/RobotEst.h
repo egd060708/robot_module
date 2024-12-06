@@ -18,6 +18,7 @@ protected:
 	Eigen::Matrix4d _Tsb;
 	Eigen::Matrix4d _Tsbi;
 public:
+	double _ctTrust[4];// 触地置信度
 	Eigen::VectorXd estimatorOut;
 	Eigen::VectorXd estimatorState;
 	inline virtual void estimatorRun(const Eigen::MatrixXd& _u,const Eigen::MatrixXd& _y,const Eigen::Vector4i& _contact,const Eigen::Vector4d& _phase) = 0;
@@ -31,6 +32,8 @@ public:
 	inline virtual Eigen::Matrix<double, 3, 4> getEstFeetVelB() = 0;
 	inline virtual Eigen::Vector3d getEstBodyPosS() = 0;
 	inline virtual Eigen::Vector3d getEstBodyVelS() = 0;
+	inline virtual Eigen::Vector3d getEstBodyPosB() = 0;
+	inline virtual Eigen::Vector3d getEstBodyVelB() = 0;
 	inline virtual Eigen::Vector3d getEstFootPosS() { return Eigen::Vector3d(0, 0, 0); }
 	inline virtual Eigen::Vector3d getEstFootVelS(){ return Eigen::Vector3d(0, 0, 0); }
 	inline void updateTsb(const Eigen::MatrixXd& _T)
@@ -44,7 +47,6 @@ class QpEst : public EstBase {
 private:
 	kelmanFilter<18, 3, 28> estimator;
 	double _largeVariance = 100;// 大的协方差
-	double _trust;// 对于腿部是否触地的置信度
 	template<typename T>
 	inline T windowFunc(const T x, const T windowRatio, const T xRange = 1.0, const T yRange = 1.0) {
 		if ((x < 0) || (x > xRange)) {
@@ -181,14 +183,15 @@ public:
 				_Q.block(6 + 3 * i, 6 + 3 * i, 3, 3) = _largeVariance * Eigen::Matrix<double, 3, 3>::Identity();
 				_R.block(12 + 3 * i, 12 + 3 * i, 3, 3) = _largeVariance * Eigen::Matrix<double, 3, 3>::Identity();
 				_R(24 + i, 24 + i) = _largeVariance;
+				_ctTrust[i] = 0;
 			}
 			else
 			{
-				_trust = windowFunc(_phase(i), 0.2);
-				_Q.block(6 + 3 * i, 6 + 3 * i, 3, 3) = (1 + (1 - _trust) * _largeVariance) * _QInit.block(6 + 3 * i, 6 + 3 * i, 3, 3);
+				_ctTrust[i] = windowFunc(_phase(i), 0.2);
+				_Q.block(6 + 3 * i, 6 + 3 * i, 3, 3) = (1 + (1 - _ctTrust[i]) * _largeVariance) * _QInit.block(6 + 3 * i, 6 + 3 * i, 3, 3);
 				//std::cout << "trustM: " << _Q.block(6 + 3 * i, 6 + 3 * i, 3, 3) << std::endl;
-				_R.block(12 + 3 * i, 12 + 3 * i, 3, 3) = (1 + (1 - _trust) * _largeVariance) * _RInit.block(12 + 3 * i, 12 + 3 * i, 3, 3);
-				_R(24 + i, 24 + i) = (1 + (1 - _trust) * _largeVariance) * _RInit(24 + i, 24 + i);
+				_R.block(12 + 3 * i, 12 + 3 * i, 3, 3) = (1 + (1 - _ctTrust[i]) * _largeVariance) * _RInit.block(12 + 3 * i, 12 + 3 * i, 3, 3);
+				_R(24 + i, 24 + i) = (1 + (1 - _ctTrust[i]) * _largeVariance) * _RInit(24 + i, 24 + i);
 			}
 		}
 		// 更新协方差矩阵
@@ -283,13 +286,27 @@ public:
 	{
 		return estimatorState.block<3, 1>(3, 0);
 	}
+
+	inline Eigen::Vector3d getEstBodyPosB() override
+	{
+		Eigen::Vector3d out;
+		Eigen::Vector4d trans(0, 0, 0, 1);
+		trans.block(0, 0, 3, 1) = estimatorState.block<3, 1>(0, 0);
+		trans = this->_Tsbi * trans;
+		out = trans.block(0, 0, 3, 1);
+		return out;
+	}
+
+	inline Eigen::Vector3d getEstBodyVelB() override
+	{
+		return this->_Tsbi.block(0,0,3,3)* estimatorState.block<3, 1>(3, 0);
+	}
 };
 
 class QpwEst : public EstBase {
-private:
+public:
 	kelmanFilter<24, 3, 44> estimator;
 	double _largeVariance = 100;// 大的协方差
-	double _ctTrust = 0;// 对于腿部是否触地的置信度
 	double _czTrust = 0;// 对于腿部参考高度的置信度
 	double wp=0.0003, wpd=0.0003, wpw=0.0003, wpwd=0.0003, wpcp=0.01;// 过程协方差参数
 	double vpcp=0.01, vpcpkd=0.01, vpcpwd=0.01, wz = 1.0, cpz = 1.0;// 测量协方差参数
@@ -418,15 +435,16 @@ public:
 				_R.block(24 + 3 * i, 24 + 3 * i, 3, 3) = _largeVariance * _RInit.block(24 + 3 * i, 24 + 3 * i, 3, 3);
 				_R(36 + i, 36 + i) = _largeVariance * _RInit(36 + i, 36 + i);
 				_R(40 + i, 40 + i) = _largeVariance * _RInit(40 + i, 40 + i);
+				_ctTrust[i] = 0;
 			}
 			else
 			{
-				_ctTrust = ctWin(_phase(i), 0.1);// 针对触地相位做信任度估计
+				_ctTrust[i] = ctWin(_phase(i), 0.1);// 针对触地相位做信任度估计
 				/*_ctTrust = windowFunc(_phase(i), 0.2);*/
 				//_czTrust = czWin(_y(3 * i + 2));// 针对当前设置高度做信任度估计
 				_czTrust = czWin(0);// 针对当前设置高度做信任度估计(暂且设置为0)
 				Eigen::Vector3d _trustM(1, 1, _czTrust);// 获取组合置信度
-				_trustM = _ctTrust * _trustM;
+				_trustM = _ctTrust[i] * _trustM;
 				_trustM = Eigen::Vector3d::Ones() + _largeVariance * (Eigen::Vector3d::Ones() - _trustM);
 				_Q.block(12 + 3 * i, 12 + 3 * i, 3, 3) = _trustM.asDiagonal() * _QInit.block(12 + 3 * i, 12 + 3 * i, 3, 3);
 				//std::cout << "trustM: " << _Q.block(12 + 3 * i, 12 + 3 * i, 3, 3) << std::endl;
@@ -547,6 +565,21 @@ public:
 	inline Eigen::Vector3d getEstBodyVelS() override
 	{
 		return estimatorState.block<3, 1>(3, 0);
+	}
+
+	inline Eigen::Vector3d getEstBodyPosB() override
+	{
+		Eigen::Vector3d out;
+		Eigen::Vector4d trans(0, 0, 0, 1);
+		trans.block(0, 0, 3, 1) = estimatorState.block<3, 1>(0, 0);
+		trans = this->_Tsbi * trans;
+		out = trans.block(0, 0, 3, 1);
+		return out;
+	}
+
+	inline Eigen::Vector3d getEstBodyVelB() override
+	{
+		return this->_Tsbi.block(0, 0, 3, 3) * estimatorState.block<3, 1>(3, 0);
 	}
 
 	inline Eigen::Vector3d getEstFootPosS()

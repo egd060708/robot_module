@@ -309,10 +309,10 @@ namespace Quadruped
 
 		for (int i(0); i < 4; ++i) {
 			if ((*gaitContact)(i) == 1) {
-				if ((*gaitPhase)(i) < 0.5) {
+				//if ((*gaitPhase)(i) < 0.5) {
 					//startP.col(i) = bodyController->bodyObject->est->getEstFeetPosS(i);
 					startP.col(i) = bodyController->bodyObject->getFKFeetPos(i);
-				}
+				//}
 				_feetPos.col(i) = startP.col(i);
 				_feetVel.col(i).setZero();
 			}
