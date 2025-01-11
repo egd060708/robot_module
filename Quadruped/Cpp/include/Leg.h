@@ -71,6 +71,7 @@ namespace Quadruped
             {
                 this->Mc[i] = _mc[i];
                 this->Ic[i] = _ic[i];
+                this->Icleg[i] = _ic[i];
                 if (i == 0)
                 {
                     switch (idx)
