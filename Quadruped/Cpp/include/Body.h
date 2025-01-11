@@ -73,43 +73,43 @@ namespace Quadruped
 
 
     public:
-        // 构造函数，绑定四个腿部状态描述类型
+        /* 构造函数，绑定四个腿部状态描述类型 */
         Body(EstBase* _est, Leg* _legObj[4], double _dt);
-        // 初始化函数，用于初始化物理参数
+        /* 初始化函数，用于初始化物理参数 */
         void initParams(Vector3d _leg2body, Vector3d _initRbLegXYPosition, double _Mb[3], Vector<double, 6> _Ib[3], Vector3d _Pb[3]);
-        // 计算齐次变换矩阵(direction为1，则是当前；为-1，则是目标)
+        /* 计算齐次变换矩阵(direction为1，则是当前；为 - 1，则是目标) */
         void calTbs(int8_t direction);
-        // 四足运动学：改变四条腿足端的位置从而改变机器人机身的位置和姿态
-        // 计算单腿基坐标系与机身坐标系下的足端位置转换(direction为1，则是(当前)腿->身；为-1，则是(目标)身->腿)
+        /* 四足运动学：改变四条腿足端的位置从而改变机器人机身的位置和姿态
+           计算单腿基坐标系与机身坐标系下的足端位置转换(direction为1，则是(当前)腿->身；为-1，则是(目标)身->腿) */
         void legAndBodyPosition(int8_t direction);
-        // 计算机身坐标系与世界坐标系下的足端位置转换(世界坐标系定义为初始状态下右后腿足端位置)（direction为1，则是(当前)身->世；为-1，则是(目标)世->身）
+        /* 计算机身坐标系与世界坐标系下的足端位置转换(世界坐标系定义为初始状态下右后腿足端位置)（direction为1，则是(当前)身->世；为 - 1，则是(目标)世->身）*/
         void bodyAndWorldFramePosition(int8_t direction);
-        // 计算足端在世界坐标系中的足端速度
+        /* 计算足端在世界坐标系中的足端速度 */
         void legVelocityInWorldFrame();
-        // 更新整机等效重心和惯量参数
+        /* 更新整机等效重心和惯量参数 */
         void updateEqBody();
 
-        // 更新目标位姿
+        /* 更新目标位姿 */
         void updateBodyTargetPos(Vector3d _angle, Vector3d _position);
-        // 更新惯导姿态
+        /* 更新惯导姿态 */
         void updateBodyImu(Vector3d _imuRPY);
         void updateBodyImu(Vector4d _imyQ);
-        // 更新陀螺仪角速度
+        /* 更新陀螺仪角速度 */
         void updateBodyGyro(Vector3d _gyro);
-        // 更新加速度计加速度
+        /* 更新加速度计加速度 */
         void updateBodyAcc(Vector3d _acc);
-        // 更新目标四足点(地面)
+        /* 更新目标四足点(地面) */
         void updateTargetFootPoint(Eigen::Matrix<double,3,4> _point);
-        // 更新目标四足速度
+        /* 更新目标四足速度 */
         void updateTargetFootVel(Eigen::Matrix<double, 3, 4> _vel);
 
-        // 获取运动学四足点位
+        /* 获取运动学四足点位 */
         Eigen::Matrix<double, 3, 4> getFKFeetPos();
         Eigen::Vector3d getFKFeetPos(int id);
         Eigen::Matrix<double, 3, 4> getFKFeetVel();
         Eigen::Vector3d getFKFeetVel(int i);
 
-        // 一些数学计算函数
+        /* 一些数学计算函数 */
         Eigen::Matrix3d quatToRot(const Vector4d& _quat);
         Eigen::Vector3d rotMatToRPY(const Matrix3d& R);
         Eigen::Vector<double, 6> parallelAxis(const Vector3d& dstAxis, const Vector3d& oriAxis, const Vector<double, 6>& oriIm, const double oriM);// 平行轴定理
@@ -128,6 +128,7 @@ namespace Quadruped
 
     void Body::initParams(Vector3d _leg2body, Vector3d _initRbLegXYPosition, double _Mb[3], Vector<double, 6> _Ib[3], Vector3d _Pb[3])
     {
+        // 腿部坐标系到机身坐标系的位置偏移
         this->leg2body[LF] = _leg2body;
         Vector3d tmp = _leg2body;
         tmp(1) = tmp(1) * -1;
@@ -136,6 +137,7 @@ namespace Quadruped
         this->leg2body[RB] = tmp;
         tmp(1) = tmp(1) * -1;
         this->leg2body[LB] = tmp;
+        // 对于对称的步态定义一个初始参数，描述的是中性立足点
         this->initRbLegXYPosition = _initRbLegXYPosition;
       /*  this->M = Eigen::Map<Matrix3d>(_M.data(),3,3);
         this->Ib = Eigen::Map<Matrix3d>(_Ib.data(),3,3);*/
@@ -303,7 +305,7 @@ namespace Quadruped
         {
             for (int j = 0; j < 4; j++)
             {
-                _I += parallelAxis(_P, this->legs[i]->Pcl[j] + this->leg2body[i], this->legs[i]->Ic[j], this->legs[i]->Mc[j]);
+                _I += parallelAxis(_P, this->legs[i]->Pcl[j] + this->leg2body[i], this->legs[i]->Icleg[j], this->legs[i]->Mc[j]);
             }
         }
         // 得到整机刚体参数
@@ -433,18 +435,18 @@ namespace Quadruped
         return dstIm;
     }
 
-    Eigen::Matrix3d Body::aI2mI(const Vector<double, 6>& oriIm)
+    Eigen::Matrix3d Body::aI2mI(const Vector<double, 6>& oriIa)
     {
         Matrix3d mI;
-        mI(0, 0) = oriIm(0);
-        mI(1, 1) = oriIm(1);
-        mI(2, 2) = oriIm(2);
-        mI(0, 1) = oriIm(3);
-        mI(1, 0) = oriIm(3);
-        mI(0, 2) = oriIm(4);
-        mI(2, 0) = oriIm(4);
-        mI(1, 2) = oriIm(5);
-        mI(2, 1) = oriIm(5);
+        mI(0, 0) = oriIa(0);
+        mI(1, 1) = oriIa(1);
+        mI(2, 2) = oriIa(2);
+        mI(0, 1) = oriIa(3);
+        mI(1, 0) = oriIa(3);
+        mI(0, 2) = oriIa(4);
+        mI(2, 0) = oriIa(4);
+        mI(1, 2) = oriIa(5);
+        mI(2, 1) = oriIa(5);
         return mI;
     }
 }

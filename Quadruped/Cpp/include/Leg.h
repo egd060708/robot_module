@@ -44,7 +44,8 @@ namespace Quadruped
         double Reff; // 末端执行器触地点速度计算等效半径
         Vector3d Pcj[4];// 所有连杆的质心相对其关节位置
         Vector3d Pcl[4];// 所有连杆的质心相对单腿系的位置
-        Vector<double, 6> Ic[4];// 所有连杆质心的惯性张量矩阵简化形式
+        Vector<double, 6> Ic[4];// 所有连杆质心的惯性张量矩阵简化形式(基于连杆原始坐标系)
+        Vector<double, 6> Icleg[4];// 所有连杆质心的惯性张量矩阵简化形式(基于单腿坐标系，其中单腿坐标系与机身坐标系平行)
         double Mc[4];// 所有连杆质量
         LPF_SecondOrder_Classdef enVelF[4] = { LPF_SecondOrder_Classdef(50,500),LPF_SecondOrder_Classdef(50,500),LPF_SecondOrder_Classdef(50,500),LPF_SecondOrder_Classdef(50,500) };
 
@@ -156,6 +157,33 @@ namespace Quadruped
         void legIP_Cal();                               // 腿部连杆惯量动态位置计算(从初始位型到当前位型)
 
         const LegS& getLegCurrent();                    // 获取单腿模型参数观测值
+
+        Eigen::Matrix3d aI2mI(const Vector<double, 6>& oriIa)
+        {
+            Matrix3d mI;
+            mI(0, 0) = oriIa(0);
+            mI(1, 1) = oriIa(1);
+            mI(2, 2) = oriIa(2);
+            mI(0, 1) = oriIa(3);
+            mI(1, 0) = oriIa(3);
+            mI(0, 2) = oriIa(4);
+            mI(2, 0) = oriIa(4);
+            mI(1, 2) = oriIa(5);
+            mI(2, 1) = oriIa(5);
+            return mI;
+        }
+
+        Eigen::Vector<double, 6> mI2aI(const Matrix3d& oriIm)
+        {
+            Vector<double, 6> aI;
+            aI(0) = oriIm(0, 0);
+            aI(1) = oriIm(1, 1);
+            aI(2) = oriIm(2, 2);
+            aI(3) = oriIm(0, 1);
+            aI(4) = oriIm(0, 2);
+            aI(5) = oriIm(1, 2);
+            return aI;
+        }
     };
 
     void Leg::updateJointAng(Vector4d _jAngle)
@@ -312,10 +340,16 @@ namespace Quadruped
         jointsP[3](0) = jointsP[2](0) - L3 * sin(currentJoint.Angle(1) + currentJoint.Angle(2));
         jointsP[3](1) = jointsP[2](1) + L3 * sin(currentJoint.Angle(0)) * cos(currentJoint.Angle(1) + currentJoint.Angle(2)) + L3b * cos(currentJoint.Angle(0));
         jointsP[3](2) = jointsP[2](2) - L3 * cos(currentJoint.Angle(0)) * cos(currentJoint.Angle(1) + currentJoint.Angle(2)) + L3b * sin(currentJoint.Angle(0));
+        // 计算每个连杆的质心到单腿坐标系的位置
         this->Pcl[0] = rhip.toRotationMatrix() * Pcj[0] + jointsP[0];
         this->Pcl[1] = (rhip * rthigh).toRotationMatrix() * Pcj[1] + jointsP[1];
         this->Pcl[2] = (rhip * rthigh * rcalf).toRotationMatrix() * Pcj[2] + jointsP[2];
         this->Pcl[3] = (rhip * rthigh * rcalf).toRotationMatrix() * Pcj[3] + jointsP[3];
+        // 计算每个连杆的惯性张量在单腿坐标系下的表达
+        this->Icleg[0] = mI2aI(rhip.toRotationMatrix() * aI2mI(Ic[0]) * rhip.toRotationMatrix().transpose());
+        this->Icleg[1] = mI2aI((rhip * rthigh).toRotationMatrix() * aI2mI(Ic[1]) * (rhip * rthigh).toRotationMatrix().transpose());
+        this->Icleg[2] = mI2aI((rhip * rthigh * rcalf).toRotationMatrix() * aI2mI(Ic[2]) * (rhip * rthigh * rcalf).toRotationMatrix().transpose());
+        this->Icleg[3] = mI2aI((rhip * rthigh * rcalf).toRotationMatrix() * aI2mI(Ic[3]) * (rhip * rthigh * rcalf).toRotationMatrix().transpose());
     }
 
     const LegS& Leg::getLegCurrent()
