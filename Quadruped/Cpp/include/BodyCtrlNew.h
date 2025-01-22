@@ -96,7 +96,7 @@ namespace Quadruped
         PIDmethod angPID[3];
 
         // 构造函数
-        QpPIDVCtrl(Body* _obj, LegCtrl* _legsCtrl[4], int timeStep):CtrlBase(_obj, _legsCtrl, timeStep)
+        QpPIDVCtrl(Body* _obj, LegCtrl* _legsCtrl[4], int timeStep):CtrlBase(_obj, _legsCtrl, timeStep), balanceController(PL_NONE)
         {
             dynamicLeft.resize(6, 12);
             dynamicRight.resize(6, 6);
@@ -314,7 +314,7 @@ namespace Quadruped
         Eigen::Vector4d wheelTau;
 
         // 构造函数
-        QpPVCtrl(Body* _obj, LegCtrl* _legsCtrl[4], int timeStep) :CtrlBase(_obj, _legsCtrl, timeStep)
+        QpPVCtrl(Body* _obj, LegCtrl* _legsCtrl[4], int timeStep) :CtrlBase(_obj, _legsCtrl, timeStep), balanceController(PL_NONE)
         {
             dynamicLeft.resize(6, 12);
             dynamicRight.resize(6, 6);
@@ -372,7 +372,7 @@ namespace Quadruped
         // 执行轮速控制器
         void wheel_adjust(const Vector4d& _p, const Vector4d& _p_dot);
         // 设置腿部接触约束
-        void setContactConstrain(const Vector4i& _contact);
+        void setContactConstrain(const Vector4i& _contact, const Matrix3d& _extR);
         // 直接设置四足输出
         void setLegsForce(const Eigen::Matrix<double, 3, 4>& _force);
         void setLegsForce(const Eigen::Matrix<double, 3, 4>& _force, const Eigen::Vector4d& _tau);
@@ -434,7 +434,7 @@ namespace Quadruped
         targetBalanceState.r_dot = _r_dot;
     }
 
-    void QpPVCtrl::setContactConstrain(const Vector4i& _contact)
+    void QpPVCtrl::setContactConstrain(const Vector4i& _contact, const Matrix3d& _extR)
     {
         Eigen::Matrix<double, 5, 3> _cA;
         _cA.setZero();
@@ -446,6 +446,11 @@ namespace Quadruped
             if (_contact(i) == 1)
             {
                 _cA << 1, 0, u, -1, 0, u, 0, 1, u, 0, -1, u, 0, 0, 1;
+                /*_cA << _extR(0, 0) + u * _extR(2, 0), _extR(0, 1) + u * _extR(2, 1), _extR(0, 2) + u * _extR(2, 2), \
+                    - _extR(0, 0) + u * _extR(2, 0), -_extR(0, 1) + u * _extR(2, 1), -_extR(0, 2) + u * _extR(2, 2), \
+                    _extR(1, 0) + u * _extR(2, 0), _extR(1, 1) + u * _extR(2, 1), _extR(1, 2) + u * _extR(2, 2), \
+                    - _extR(1, 0) + u * _extR(2, 0), -_extR(1, 1) + u * _extR(2, 1), -_extR(1, 2) + u * _extR(2, 2), \
+                    _extR(2, 0), _extR(2, 1), _extR(2, 2);*/
                 _Aub.setConstant(100000.);
             }
             else
@@ -544,7 +549,7 @@ namespace Quadruped
         PIDmethod wheelPID[4];
 
         // 构造函数
-        QpwPIDVCtrl(Body* _obj, LegCtrl* _legsCtrl[4], int timeStep) :CtrlBase(_obj, _legsCtrl, timeStep)
+        QpwPIDVCtrl(Body* _obj, LegCtrl* _legsCtrl[4], int timeStep) :CtrlBase(_obj, _legsCtrl, timeStep), balanceController(PL_NONE)
         {
             dynamicLeft.resize(10, 16);
             dynamicRight.resize(10, 10);
@@ -823,7 +828,7 @@ namespace Quadruped
 
     public:
         // 机器人平衡控制器
-        mpcCal<23, 16, 20, 1, 5> balanceController;
+        mpcCal<23, 16, 28, 1, 5> balanceController;
         double u = 1;// 摩擦系数
         double force_c = 1000;// 输出力限制限制
         double tau_c = 20; // 输出力矩限制
@@ -831,7 +836,7 @@ namespace Quadruped
         double fftauRatio[4] = { 0.5 };
 
         // 构造函数
-        QpwPVCtrl(Body* _obj, LegCtrl* _legsCtrl[4], int timeStep) :CtrlBase(_obj, _legsCtrl, timeStep)
+        QpwPVCtrl(Body* _obj, LegCtrl* _legsCtrl[4], int timeStep) :CtrlBase(_obj, _legsCtrl, timeStep), balanceController(PL_NONE)
         {
             dynamicLeft.resize(10, 16);
             dynamicRight.resize(10, 10);
@@ -844,9 +849,9 @@ namespace Quadruped
             W.resize(16, 16);
             lb.resize(16, 1);
             ub.resize(16, 1);
-            cA.resize(20, 16);
-            Alb.resize(20, 1);
-            Aub.resize(20, 1);
+            cA.resize(28, 16);
+            Alb.resize(28, 1);
+            Aub.resize(28, 1);
             y.resize(23);
             x.resize(23);
 
@@ -879,13 +884,22 @@ namespace Quadruped
             cA.setZero();
 
             // unitree constrain
-            Eigen::Matrix<double, 5, 3> _cA;
-            _cA.setZero();
-            _cA << 1, 0, u, -1, 0, u, 0, 1, u, 0, -1, u, 0, 0, 1;
-            cA.block<5, 3>(0, 0) = _cA;
-            cA.block<5, 3>(5, 3) = _cA;
-            cA.block<5, 3>(10, 6) = _cA;
-            cA.block<5, 3>(15, 9) = _cA;
+            Eigen::Matrix<double, 5, 3> _fcA;
+            _fcA.setZero();
+            _fcA << 1, 0, u, -1, 0, u, 0, 1, u, 0, -1, u, 0, 0, 1;
+            cA.block<5, 3>(0, 0) = _fcA;
+            cA.block<5, 3>(5, 3) = _fcA;
+            cA.block<5, 3>(10, 6) = _fcA;
+            cA.block<5, 3>(15, 9) = _fcA;
+            Eigen::Matrix<double,8,16> _tcA;
+            _tcA.setZero();
+            for (int i = 0; i < 4; i++)
+            {
+                _tcA(0 + 2 * i, 2 + 3 * i) = u;
+                _tcA(1 + 2 * i, 2 + 3 * i) = u;
+                _tcA(0 + 2 * i, 12 + i) = 1. / bodyObject->legs[i]->Reff;
+                _tcA(1 + 2 * i, 12 + i) = - 1. / bodyObject->legs[i]->Reff;
+            }
             Alb.setZero();
             Aub.setConstant(100000.);
         }
@@ -906,7 +920,7 @@ namespace Quadruped
         // 直接设置四足输出
         void setLegsForce(const Eigen::Matrix<double, 3, 4>& _force, const Eigen::Vector4d& _tau);
         // 四足腾空处理
-        void contactDeal(const VectorXd& _oriQ, const double _ffRatio);
+        void contactDeal(const VectorXd& _oriQ, const double _ffRatio, const double _stRatio);
     };
 
 
@@ -1035,26 +1049,37 @@ namespace Quadruped
 
     void QpwPVCtrl::setContactConstrain(const Vector4i& _contact)
     {
-        Eigen::Matrix<double, 5, 3> _cA;
-        _cA.setZero();
+        Eigen::Matrix<double, 5, 3> _fcA;
+        _fcA.setZero();
         Eigen::Matrix<double, 5, 1> _Aub;
         _Aub.setZero();
+        Eigen::Matrix<double, 8, 16> _tcA;
+        _tcA.setZero();
         // 若该腿不触地，则清零约束矩阵
         for (int i = 0; i < 4; i++)
         {
             if (_contact(i) == 1)
             {
-                _cA << 1, 0, u, -1, 0, u, 0, 1, u, 0, -1, u, 0, 0, 1;
+                _fcA << 1, 0, u, -1, 0, u, 0, 1, u, 0, -1, u, 0, 0, 1;
                 _Aub.setConstant(100000.);
+                _tcA(0 + 2 * i, 2 + 3 * i) = u;
+                _tcA(1 + 2 * i, 2 + 3 * i) = u;
+                _tcA(0 + 2 * i, 12 + i) = 1. / bodyObject->legs[i]->Reff;
+                _tcA(1 + 2 * i, 12 + i) = -1. / bodyObject->legs[i]->Reff;
             }
             else
             {
-                _cA << 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+                _fcA << 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
                 _Aub.setZero();
+                _tcA(0 + 2 * i, 2 + 3 * i) = 0;
+                _tcA(1 + 2 * i, 2 + 3 * i) = 0;
+                _tcA(0 + 2 * i, 12 + i) = 1.;
+                _tcA(1 + 2 * i, 12 + i) = 0;
             }
-            this->cA.block<5, 3>(5 * i, 3 * i) = _cA;
+            this->cA.block<5, 3>(5 * i, 3 * i) = _fcA;
             this->Aub.block<5, 1>(5 * i, 0) = _Aub;
         }
+        this->cA.block(20, 0, 8, 16) = _tcA;
         lb.block(0, 0, 12, 1).setConstant(-force_c);
         ub.block(0, 0, 12, 1).setConstant(force_c);
         lb.block(12, 0, 4, 1).setConstant(-tau_c);
@@ -1070,14 +1095,17 @@ namespace Quadruped
         }
     }
 
-    void QpwPVCtrl::contactDeal(const VectorXd& _oriQ, const double _ffRatio)
+    void QpwPVCtrl::contactDeal(const VectorXd& _oriQ, const double _ffRatio, const double _stRatio)
     {
         this->Q = _oriQ.asDiagonal();
-        for (int i = 0; i < 4; i++)
+        if (_stRatio < 1.)
         {
-            this->Q(6 + i, 6 + i) = _oriQ(6 + i) * (1e-10 + bodyObject->est->_ctTrust[i]);
-            this->Q(16 + i, 16 + i) = _oriQ(16 + i) * (1 + 1e3 * (1 - bodyObject->est->_ctTrust[i]));
-            this->fftauRatio[i] = _ffRatio * bodyObject->est->_ctTrust[i];
+            for (int i = 0; i < 4; i++)
+            {
+                this->Q(6 + i, 6 + i) = _oriQ(6 + i) * (1e-10 + bodyObject->est->_ctTrust[i]);
+                this->Q(16 + i, 16 + i) = _oriQ(16 + i) * (1 + 1e3 * (1 - bodyObject->est->_ctTrust[i]));
+                this->fftauRatio[i] = _ffRatio * bodyObject->est->_ctTrust[i];
+            }
         }
         this->F = this->Q;
     }

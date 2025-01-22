@@ -177,15 +177,19 @@ namespace Quadruped
             //Tsb_c.block<3, 1>(0, 3) = currentWorldState.dist;
             // 使用四元数得到变换矩阵
             Eigen::Matrix3d rotation_c = quatToRot(currentBodyState.Quat);
+            //Rsb_c = rotation_c * _extR.transpose();
             Rsb_c = rotation_c;
-            currentBodyState.Ang_xyz = rotMatToRPY(rotation_c);
-            Tsb_c.block<3, 3>(0, 0) = rotation_c;
+            /*std::cout << "ori: \n" << rotation_c << std::endl;
+            std::cout << "ext: \n" << _extR << std::endl;
+            std::cout << "all: \n" << Rsb_c << std::endl;*/
+            currentBodyState.Ang_xyz = rotMatToRPY(Rsb_c);
+            Tsb_c.block<3, 3>(0, 0) = Rsb_c;
             Tsb_c.block<3, 1>(0, 3) = currentWorldState.dist;
             // 更新其他世界坐标系下的变量
-            currentWorldState.angVel_xyz = rotation_c * currentBodyState.angVel_xyz;
+            currentWorldState.angVel_xyz = Rsb_c * currentBodyState.angVel_xyz;
             //currentWorldState.linVel_xyz = rotation_c * currentBodyState.linVel_xyz;
             // currentWorldState.angAcc_xyz = rotation_c * currentBodyState.angAcc_xyz;
-            currentWorldState.linAcc_xyz = rotation_c * currentBodyState.linAcc_xyz;
+            currentWorldState.linAcc_xyz = Rsb_c * currentBodyState.linAcc_xyz;
             est->updateTsb(Tsb_c);
         }
         else if (direction == -1)
