@@ -934,7 +934,8 @@ namespace Quadruped
             Vector3d Pbi = Vector3d::Zero();
             Pbi = bodyObject->Rsb_c * (bodyObject->currentBodyState.leg_b[i].Position - bodyObject->P);
             //Pbi = (currentBodyState.leg_b[i].Position - Pb);
-            dynamicLeft.block<3, 3>(3, i * 3) = bodyObject->v3_to_m3(Pbi);
+            dynamicLeft.block<3, 3>(0, i * 3) = fftauRatio[i] * Eigen::Matrix3d::Identity();
+            dynamicLeft.block<3, 3>(3, i * 3) = fftauRatio[i] * bodyObject->v3_to_m3(Pbi);
 
             // 轮相关物理参数更新
             dynamicRight(6 + i, 6 + i) = bodyObject->legs[i]->Ic[3](1) / pow(bodyObject->legs[i]->Reff, 2) + bodyObject->legs[i]->Mc[3];
@@ -1060,6 +1061,7 @@ namespace Quadruped
         {
             if (_contact(i) == 1)
             {
+                targetBalanceState.pe_dot(i) = 0;
                 _fcA << 1, 0, u, -1, 0, u, 0, 1, u, 0, -1, u, 0, 0, 1;
                 _Aub.setConstant(100000.);
                 _tcA(0 + 2 * i, 2 + 3 * i) = u;
@@ -1103,8 +1105,15 @@ namespace Quadruped
             for (int i = 0; i < 4; i++)
             {
                 this->Q(6 + i, 6 + i) = _oriQ(6 + i) * (1e-10 + bodyObject->est->_ctTrust[i]);
-                this->Q(16 + i, 16 + i) = _oriQ(16 + i) * (1 + 1e3 * (1 - bodyObject->est->_ctTrust[i]));
+                this->Q(16 + i, 16 + i) = _oriQ(16 + i) * (1 + 1e2 * (1 - bodyObject->est->_ctTrust[i]));
                 this->fftauRatio[i] = _ffRatio * bodyObject->est->_ctTrust[i];
+            }
+        }
+        else
+        {
+            for (int i = 0; i < 4; i++)
+            {
+                this->fftauRatio[i] = 1;
             }
         }
         this->F = this->Q;

@@ -102,21 +102,21 @@ namespace Quadruped {
 		/* 获取翻滚轴以及翻滚点 */
 		void getTumbling()
 		{
-			for (int i = 0; i < 4; i++)
-			{
-				if (i == 3)
-				{
-					double temp = -(this->Plc.col(0) - this->Plc.col(i)).transpose() * (this->Plc.col(i) - this->Pbc);
-					tumblingAxis(i) = temp / (this->Plc.col(0) - this->Plc.col(i)).squaredNorm();
-					tumblingPoint.col(i) = this->Plc.col(i) + tumblingAxis(i) * (this->Plc.col(0) - this->Plc.col(i));
-				}
-				else
-				{
-					double temp = -(this->Plc.col(i + 1) - this->Plc.col(i)).transpose() * (this->Plc.col(i) - this->Pbc);
-					tumblingAxis(i) = temp / (this->Plc.col(i + 1) - this->Plc.col(i)).squaredNorm();
-					tumblingPoint.col(i) = this->Plc.col(i) + tumblingAxis(i) * (this->Plc.col(i + 1) - this->Plc.col(i));
-				}
-			}
+			double temp = -(this->Plc.col(1) - this->Plc.col(0)).transpose() * (this->Plc.col(0) - this->Pbc);
+			tumblingAxis(0) = temp / (this->Plc.col(1) - this->Plc.col(0)).squaredNorm();
+			tumblingPoint.col(0) = this->Plc.col(0) + tumblingAxis(0) * (this->Plc.col(1) - this->Plc.col(0));
+
+			temp = -(this->Plc.col(3) - this->Plc.col(1)).transpose() * (this->Plc.col(1) - this->Pbc);
+			tumblingAxis(1) = temp / (this->Plc.col(3) - this->Plc.col(1)).squaredNorm();
+			tumblingPoint.col(1) = this->Plc.col(1) + tumblingAxis(1) * (this->Plc.col(3) - this->Plc.col(1));
+
+			temp = -(this->Plc.col(2) - this->Plc.col(3)).transpose() * (this->Plc.col(3) - this->Pbc);
+			tumblingAxis(2) = temp / (this->Plc.col(2) - this->Plc.col(3)).squaredNorm();
+			tumblingPoint.col(2) = this->Plc.col(3) + tumblingAxis(2) * (this->Plc.col(2) - this->Plc.col(3));
+
+			temp = -(this->Plc.col(0) - this->Plc.col(2)).transpose() * (this->Plc.col(2) - this->Pbc);
+			tumblingAxis(3) = temp / (this->Plc.col(0) - this->Plc.col(2)).squaredNorm();
+			tumblingPoint.col(3) = this->Plc.col(2) + tumblingAxis(3) * (this->Plc.col(0) - this->Plc.col(2));
 		}
 
 		/* 找到平衡锥约束参数 */
@@ -124,38 +124,39 @@ namespace Quadruped {
 		{
 			Eigen::Vector3d g(0, 0, -9.81);
 			// 找到最严格的约束点(计算最小夹角)，以及相对于x轴和y轴的最严格约束点
-			double temp = g.dot(this->tumblingPoint.col(0) - this->Pbc) / (g.norm() + (this->tumblingPoint.col(0) - this->Pbc).norm());
+			double temp = g.dot(this->tumblingPoint.col(0) - this->Pbc) / (g.norm() * (this->tumblingPoint.col(0) - this->Pbc).norm());
 			double tempx = temp;
-			double tempy = g.dot(this->tumblingPoint.col(1) - this->Pbc) / (g.norm() + (this->tumblingPoint.col(1) - this->Pbc).norm());
-			int min_idx = 0, min_idxX = 0, min_idxY = 1;
+			double tempy = g.dot(this->tumblingPoint.col(1) - this->Pbc) / (g.norm() * (this->tumblingPoint.col(1) - this->Pbc).norm());
+			int max_idx = 0, max_idxX = 0, max_idxY = 1;
+			Eigen::Vector4d temp4;
 			for (int i = 0; i < 4; i++)
 			{
-				double temp1 = g.dot(this->tumblingPoint.col(i) - this->Pbc) / (g.norm() + (this->tumblingPoint.col(i) - this->Pbc).norm());
-				if (temp1 < temp)
+				double temp1 = g.dot(this->tumblingPoint.col(i) - this->Pbc) / (g.norm() * (this->tumblingPoint.col(i) - this->Pbc).norm());
+				if (temp1 > temp)
 				{
-					min_idx = i;
+					max_idx = i;
 					temp = temp1;
 				}
 				if (i == 0 || i == 2)
 				{
-					if (temp1 < tempx)
+					if (temp1 > tempx)
 					{
-						min_idxX = i;
+						max_idxX = i;
 						tempx = temp1;
 					}
 				}
 				else if (i == 1 || i == 3)
 				{
-					if (temp1 < tempy)
+					if (temp1 > tempy)
 					{
-						min_idxY = i;
+						max_idxY = i;
 						tempy = temp1;
 					}
 				}
 			}
-			balanceCone = balanceMargin * (this->tumblingPoint.col(min_idx) - this->Pbc).block(0, 0, 2, 1).norm() / abs((this->tumblingPoint.col(min_idx) - this->Pbc)(2));
-			balanceConeX = balanceMarginX * (this->tumblingPoint.col(min_idxX) - this->Pbc).block(0, 0, 2, 1).norm() / abs((this->tumblingPoint.col(min_idxX) - this->Pbc)(2));
-			balanceConeY = balanceMarginY * (this->tumblingPoint.col(min_idxY) - this->Pbc).block(0, 0, 2, 1).norm() / abs((this->tumblingPoint.col(min_idxY) - this->Pbc)(2));
+			balanceCone = balanceMargin * (this->tumblingPoint.col(max_idx) - this->Pbc).block(0, 0, 2, 1).norm() / abs((this->tumblingPoint.col(max_idx) - this->Pbc)(2));
+			balanceConeX = balanceMarginX * (this->tumblingPoint.col(max_idxX) - this->Pbc).block(0, 0, 2, 1).norm() / abs((this->tumblingPoint.col(max_idxX) - this->Pbc)(2));
+			balanceConeY = balanceMarginY * (this->tumblingPoint.col(max_idxY) - this->Pbc).block(0, 0, 2, 1).norm() / abs((this->tumblingPoint.col(max_idxY) - this->Pbc)(2));
 		}
 
 	public:
@@ -180,7 +181,7 @@ namespace Quadruped {
 	{
 	private:
 		/* 针对机身的轨迹规划mpc生成器 */
-		mpcCal<6, 3, 16, 1, 10> traBodyGenerator;
+		mpcCal<6, 3, 8, 1, 10> traBodyGenerator;
 		/* 预测时间步长 */
 		double body_step_t = 0;
 		double foot_step_t = 0;
@@ -197,21 +198,22 @@ namespace Quadruped {
 		void updateBodyIeqConstrain(const Vector3d& _aMax)
 		{
 			// 平衡约束转化为线性锥约束
-			Eigen::Matrix<double, 16, 3> cA;
+			Eigen::Matrix<double, 8, 3> cA;
 			cA.setZero();
-			cA << 1, 0, this->balanceCone, -1, 0, this->balanceCone, 0, 1, this->balanceCone, 0, -1, this->balanceCone, \
-				1, 1, 1.414 * this->balanceCone, -1, 1, 1.414 * this->balanceCone, -1, -1, 1.414 * this->balanceCone, 1, -1, 1.414 * this->balanceCone, \
-				1, 1, -1.414 * this->balanceCone, -1, 1, -1.414 * this->balanceCone, -1, -1, -1.414 * this->balanceCone, 1, -1, 1.414 * this->balanceCone, \
+			cA << 1, 0, this->balanceConeX, -1, 0, this->balanceConeX, 0, 1, this->balanceConeY, 0, -1, this->balanceConeY, \
+				/*1, 1, 1.414 * this->balanceCone, -1, 1, 1.414 * this->balanceCone, -1, -1, 1.414 * this->balanceCone, 1, -1, 1.414 * this->balanceCone, \
+				1, 1, -1.414 * this->balanceCone, -1, 1, -1.414 * this->balanceCone, -1, -1, -1.414 * this->balanceCone, 1, -1, 1.414 * this->balanceCone, \*/
 				1, 1, 0, 1, -1, 0, -1, 1, 0, -1, -1, 0;
-			Eigen::Vector<double, 16> Aub, Alb;
-			Aub.block(0, 0, 4, 1).setConstant(-(this->balanceCone * -9.81));
+			Eigen::Vector<double, 8> Aub, Alb;
+			Aub.block(0, 0, 2, 1).setConstant(-(this->balanceConeX * -9.81));
+			Aub.block(2, 0, 2, 1).setConstant(-(this->balanceConeY * -9.81));
 			Alb.block(0, 0, 4, 1).setConstant(-100000.);
-			Aub.block(4, 0, 4, 1).setConstant(-1.414 * this->balanceCone * -9.81);
-			Alb.block(4, 0, 4, 1).setConstant(-100000.);
-			Aub.block(8, 0, 4, 1).setConstant(100000.);
-			Alb.block(8, 0, 4, 1).setConstant(1.414 * this->balanceCone * -9.81);
-			Aub.block(12, 0, 4, 1).setConstant(_aMax.segment(0, 2).norm());
-			Alb.block(12, 0, 4, 1).setConstant(-_aMax.segment(0, 2).norm());
+			//Aub.block(4, 0, 4, 1).setConstant(-1.414 * this->balanceCone * -9.81);
+			//Alb.block(4, 0, 4, 1).setConstant(-100000.);
+			//Aub.block(8, 0, 4, 1).setConstant(100000.);
+			//Alb.block(8, 0, 4, 1).setConstant(1.414 * this->balanceCone * -9.81);
+			Aub.block(4, 0, 4, 1).setConstant(_aMax.segment(0, 2).norm());
+			Alb.block(4, 0, 4, 1).setConstant(-_aMax.segment(0, 2).norm());
 			this->traBodyGenerator.setBoxConstrain(cA, Alb, Aub);
 		}
 
@@ -228,7 +230,7 @@ namespace Quadruped {
 			this->traBodyGenerator.mpc_update(y, x, 100, 1.);
 			this->traBodyGenerator.mpc_solve();
 			this->bodyAcc = this->traBodyGenerator.getOutput();
-			this->Vbr = this->Vbr + 0.002 * this->traBodyGenerator.getOutput();
+			this->Vbr = this->Vbr + 0.002 * this->Rsb_c * this->bodyAcc;
 			this->Pbr = this->Pbr + 0.5 * 0.002 * (last_Vbr + this->Vbr);
 			last_Vbr = this->Vbr;
 		}
@@ -238,7 +240,7 @@ namespace Quadruped {
 		{
 			// 对足端的加速度边界不等式约束设置所有边界
 			double edgeX1, edgeX2, edgeY1, edgeY2;
-			Eigen::Vector3d realBodyAcc = this->Rsb_c.transpose() * this->bodyAcc;
+			Eigen::Vector3d realBodyAcc = this->bodyAcc;
 			edgeX1 = realBodyAcc(0) + this->balanceConeX * (realBodyAcc(2) - 9.81);
 			edgeX2 = -realBodyAcc(0) + this->balanceConeX * (realBodyAcc(2) - 9.81);
 			edgeY1 = realBodyAcc(1) + this->balanceConeY * (realBodyAcc(2) - 9.81);
@@ -305,9 +307,8 @@ namespace Quadruped {
 			this->Rsb_c.setIdentity();
 		}
 		/* 规划器预热 */
-		void warmUp(const Eigen::Matrix3d& _Rsbc)
+		void warmUp()
 		{
-			this->Rsb_c = _Rsbc;
 			this->updateSupportPolygon();
 		}
 		/* 使用机身规划器 */
@@ -323,8 +324,9 @@ namespace Quadruped {
 			this->getFootSolution();
 		}
 		/* 更新规划器参数 */
-		void updateBodyParams(const double& _t, const double& _balanceMargin, const Eigen::Matrix<double, 6, 6>& _Q, const Eigen::Matrix<double, 6, 6>& _F, const Eigen::Matrix<double, 3, 3>& _R, const Eigen::Matrix<double, 3, 3>& _W)
+		void updateBodyParams(const Eigen::Matrix3d& _Rsbc, const double& _t, const double& _balanceMargin, const Eigen::Matrix<double, 6, 6>& _Q, const Eigen::Matrix<double, 6, 6>& _F, const Eigen::Matrix<double, 3, 3>& _R, const Eigen::Matrix<double, 3, 3>& _W)
 		{
+			this->Rsb_c = _Rsbc;
 			this->body_step_t = _t;
 			this->balanceMargin = _balanceMargin;
 			// 初始化轨迹生成器
@@ -338,7 +340,7 @@ namespace Quadruped {
 			st.setConstant(this->body_step_t);
 			A.block(0, 3, 3, 3) = st.asDiagonal();
 			A.block(3, 3, 3, 3).setIdentity();
-			B.block(3, 0, 3, 3) = st.asDiagonal();
+			B.block(3, 0, 3, 3) = st.asDiagonal()*this->Rsb_c;
 			traBodyGenerator.mpc_init(A, B, _Q, _F, _R, _W, 0);
 		}
 		void updateFootParams(const double& _t, const double& _balanceMarginX, const double& _balanceMarginY, const Eigen::Matrix<double, 16, 16>& _Q, const Eigen::Matrix<double, 16, 16>& _F, const Eigen::Matrix<double, 8, 8>& _R, const Eigen::Matrix<double, 8, 8>& _W)
@@ -389,7 +391,7 @@ namespace Quadruped {
 	{
 	private:
 		/* mpc轨迹规划器 */
-		mpcCal<22, 11, 32, 1, 5> traGenerator;
+		mpcCal<22, 11, 24, 1, 8> traGenerator;
 		/* 每步预测的时间长度 */
 		double step_t;
 		/* mpc预测输出 */
@@ -397,26 +399,23 @@ namespace Quadruped {
 		Eigen::Matrix<double, 3, 4> footAcc;
 		/* 坐标转换 */
 		Eigen::Matrix3d Rsb_c;
+		/* 足端加速度约束与机身稳定裕度的比例 */
+		double fbp;
 
 		/* 配置关键不等式约束 */
 		void updateJointIeqConstrain(const Eigen::Vector<double, 11>& _aMax)
 		{
 			// 平衡约束转化为线性锥约束
-			Eigen::Matrix<double, 16, 3> cbA;
+			Eigen::Matrix<double, 8, 3> cbA;
 			cbA.setZero();
-			cbA << 1, 0, this->balanceCone, -1, 0, this->balanceCone, 0, 1, this->balanceCone, 0, -1, this->balanceCone, \
-				1, 1, 1.414 * this->balanceCone, -1, 1, 1.414 * this->balanceCone, -1, -1, 1.414 * this->balanceCone, 1, -1, 1.414 * this->balanceCone, \
-				1, 1, -1.414 * this->balanceCone, -1, 1, -1.414 * this->balanceCone, -1, -1, -1.414 * this->balanceCone, 1, -1, 1.414 * this->balanceCone, \
+			cbA << 1, 0, this->balanceConeX, -1, 0, this->balanceConeX, 0, 1, this->balanceConeY, 0, -1, this->balanceConeY, \
 				1, 1, 0, 1, -1, 0, -1, 1, 0, -1, -1, 0;
-			Eigen::Vector<double, 16> Abub, Ablb;
-			Abub.block(0, 0, 4, 1).setConstant(-(this->balanceCone * -9.81));
+			Eigen::Vector<double, 8> Abub, Ablb;
+			Abub.block(0, 0, 2, 1).setConstant(-(this->balanceConeX * -9.81));
+			Abub.block(2, 0, 2, 1).setConstant(-(this->balanceConeY * -9.81));
 			Ablb.block(0, 0, 4, 1).setConstant(-100000.);
-			Abub.block(4, 0, 4, 1).setConstant(-1.414 * this->balanceCone * -9.81);
-			Ablb.block(4, 0, 4, 1).setConstant(-100000.);
-			Abub.block(8, 0, 4, 1).setConstant(100000.);
-			Ablb.block(8, 0, 4, 1).setConstant(1.414 * this->balanceCone * -9.81);
-			Abub.block(12, 0, 4, 1).setConstant(_aMax.segment(0, 2).norm());
-			Ablb.block(12, 0, 4, 1).setConstant(-_aMax.segment(0, 2).norm());
+			Abub.block(4, 0, 4, 1).setConstant(_aMax.segment(0, 2).norm());
+			Ablb.block(4, 0, 4, 1).setConstant(-_aMax.segment(0, 2).norm());
 
 			// 对足端的加速度边界不等式约束设置所有边界
 			Eigen::Matrix<double, 16, 11> cfA;
@@ -425,14 +424,29 @@ namespace Quadruped {
 			Afub.setConstant(100000.);
 			for (int i = 0; i < 4; i++)
 			{
-				cfA(4*i + 0, 0) = -1; cfA(4*i + 0, 2) = -this->balanceMarginX;
-				cfA(4*i + 1, 0) = 1;  cfA(4*i + 1, 2) = -this->balanceMarginX;
-				cfA(4*i + 2, 1) = -1; cfA(4*i + 2, 2) = -this->balanceMarginY;
-				cfA(4*i + 3, 1) = 1;  cfA(4*i + 3, 2) = -this->balanceMarginY;
-				Aflb(4 * i + 0) = this->balanceMarginX * -9.81;
-				Aflb(4 * i + 1) = this->balanceMarginX * -9.81;
-				Aflb(4 * i + 2) = this->balanceMarginY * -9.81;
-				Aflb(4 * i + 3) = this->balanceMarginY * -9.81;
+				// 机身x和z加速度受影响
+				cfA(4*i + 0, 0) = -1; cfA(4*i + 0, 2) = -this->fbp * this->balanceConeX;
+				cfA(4*i + 1, 0) = 1;  cfA(4*i + 1, 2) = -this->fbp * this->balanceConeX;
+				cfA(4*i + 2, 1) = -1; cfA(4*i + 2, 2) = -this->fbp * this->balanceConeY;
+				cfA(4*i + 3, 1) = 1;  cfA(4*i + 3, 2) = -this->fbp * this->balanceConeY;
+				Aflb(4 * i + 0) = this->fbp * this->balanceConeX * (-9.81);
+				Aflb(4 * i + 1) = this->fbp * this->balanceConeX * (-9.81);
+				Aflb(4 * i + 2) = this->fbp * this->balanceConeY * (-9.81);
+				Aflb(4 * i + 3) = this->fbp * this->balanceConeY * (-9.81);
+				// 机身x方向加速度受影响
+				/*cfA(4 * i + 0, 0) = -1;
+				cfA(4 * i + 1, 0) = 1; 
+				cfA(4 * i + 2, 1) = -1;
+				cfA(4 * i + 3, 1) = 1; 
+				Aflb(4 * i + 0) = this->fbp * this->balanceConeX * (this->bodyAcc(2)-9.81);
+				Aflb(4 * i + 1) = this->fbp * this->balanceConeX * (this->bodyAcc(2)-9.81);
+				Aflb(4 * i + 2) = this->fbp * this->balanceConeY * (this->bodyAcc(2)-9.81);
+				Aflb(4 * i + 3) = this->fbp * this->balanceConeY * (this->bodyAcc(2)-9.81);*/
+				// 机身加速度不受足端影响
+				/*Aflb(4 * i + 0) = this->bodyAcc(0) + this->fbp * this->balanceConeX * (this->bodyAcc(2) - 9.81);
+				Aflb(4 * i + 1) = -this->bodyAcc(0) + this->fbp * this->balanceConeX * (this->bodyAcc(2) - 9.81);
+				Aflb(4 * i + 2) = this->bodyAcc(1) + this->fbp * this->balanceConeY * (this->bodyAcc(2) - 9.81);
+				Aflb(4 * i + 3) = -this->bodyAcc(1) + this->fbp * this->balanceConeY * (this->bodyAcc(2) - 9.81);*/
 			}
 			cfA(0, 3) = 1; cfA(1, 3) = 1;
 			cfA(2, 4) = 1; cfA(3, 4) = 1;
@@ -444,15 +458,19 @@ namespace Quadruped {
 			cfA(14, 10) = -1; cfA(15, 10) = -1;
 
 			// 联合约束矩阵
-			Eigen::Matrix<double, 32, 11> cA;
+			Eigen::Matrix<double, 24, 11> cA;
 			cA.setZero();
-			cA.block(0, 0, 16, 3) = cbA;
-			cA.block(16, 0, 16, 11) = cfA;
-			Eigen::Vector<double, 32> Aub, Alb;
-			Aub.segment(0, 16) = Abub;
-			Alb.segment(0, 16) = Ablb;
-			Aub.segment(16, 16) = Afub;
-			Alb.segment(16, 16) = Aflb;
+			cA.block(0, 0, 8, 3) = cbA;
+			cA.block(8, 0, 16, 11) = cfA;
+			Eigen::Vector<double, 24> Aub, Alb;
+			Aub.segment(0, 8) = Abub;
+			Alb.segment(0, 8) = Ablb;
+			Aub.segment(8, 16) = Afub;
+			Alb.segment(8, 16) = Aflb;
+
+			/*std::cout << "cA: \n" << cA << std::endl;
+			std::cout << "Aub:\n" << Aub.transpose() << std::endl;
+			std::cout << "Alb:\n" << Alb.transpose() << std::endl;*/
 
 			traGenerator.setBoxConstrain(cA, Alb, Aub);
 		}
@@ -462,9 +480,11 @@ namespace Quadruped {
 		{
 			static Eigen::Vector3d last_Vbr = this->Vbr;
 			Eigen::Vector<double, 22> y, x;
+			Eigen::Vector3d Py(this->Pbr(0), this->Pbr(1), this->Pbt(2));
 			x.block(0, 0, 3, 1) = this->Pbr;
 			x.block(3, 0, 3, 1) = this->Vbr;
 			y.block(0, 0, 3, 1) = this->Pbt;
+			//y.block(0, 0, 3, 1) = Py;
 			y.block(3, 0, 3, 1) = this->Vbt;
 
 			static Eigen::Matrix<double, 3, 4> last_Vlr = this->Vlr;
@@ -475,7 +495,7 @@ namespace Quadruped {
 			x.block(14, 0, 2, 1) = this->Vlr.col(0).segment(0, 2);
 			x.block(16, 0, 2, 1) = this->Vlr.col(1).segment(0, 2);
 			x.block(18, 0, 2, 1) = this->Vlr.col(2).segment(0, 2);
-			x.block(12, 0, 2, 1) = this->Vlr.col(3).segment(0, 2);
+			x.block(20, 0, 2, 1) = this->Vlr.col(3).segment(0, 2);
 			y.block(6, 0, 2, 1) = this->Plt.col(0).segment(0, 2);
 			y.block(8, 0, 2, 1) = this->Plt.col(1).segment(0, 2);
 			y.block(10, 0, 2, 1) = this->Plt.col(2).segment(0, 2);
@@ -485,7 +505,7 @@ namespace Quadruped {
 			this->traGenerator.mpc_update(y, x, 100, 1.);
 			this->traGenerator.mpc_solve();
 
-			this->bodyAcc = this->traGenerator.getOutput().segment(0,3);
+			this->bodyAcc = this->traGenerator.getOutput().block(0,0,3,1);
 			this->Vbr = this->Vbr + 0.002 * this->Rsb_c * this->bodyAcc;
 			this->Pbr = this->Pbr + 0.5 * 0.002 * (last_Vbr + this->Vbr);
 			last_Vbr = this->Vbr;
@@ -509,11 +529,11 @@ namespace Quadruped {
 			this->Plr.setZero();
 			this->Vlr.setZero();
 			this->Rsb_c.setIdentity();
+			fbp = 1.;
 		}
 		/* 规划器预热 */
-		void warmUp(const Eigen::Matrix3d& _Rsbc)
+		void warmUp()
 		{
-			this->Rsb_c = _Rsbc;
 			this->updateSupportPolygon();
 		}
 		/* 使用机身规划器 */
@@ -526,10 +546,11 @@ namespace Quadruped {
 			this->traGenerator.setConstrain(lb, ub);
 			this->getJointSolution();
 		}
-		void updateJointParams(double _t, double _bMargin, double _bMarginX, double _bMarginY, const Eigen::Matrix<double, 22, 22>& _Q, const Eigen::Matrix<double, 22, 22>& _F, const Eigen::Matrix<double, 11, 11>& _R, const Eigen::Matrix<double, 11, 11>& _W)
+		void updateJointParams(const Eigen::Matrix3d& _Rsbc, double _t, double _fbp, double _bMarginX, double _bMarginY, const Eigen::Matrix<double, 22, 22>& _Q, const Eigen::Matrix<double, 22, 22>& _F, const Eigen::Matrix<double, 11, 11>& _R, const Eigen::Matrix<double, 11, 11>& _W)
 		{
+			this->Rsb_c = _Rsbc;
 			this->step_t = _t;
-			this->balanceMargin = _bMargin;
+			this->fbp = _fbp;
 			this->balanceMarginX = _bMarginX;
 			this->balanceMarginY = _bMarginY;
 			MatrixXd A, B;
@@ -542,7 +563,7 @@ namespace Quadruped {
 			A.block(0, 0, 3, 3).setIdentity();
 			A.block(0, 3, 3, 3) = bt.asDiagonal();
 			A.block(3, 3, 3, 3).setIdentity();
-			B.block(3, 0, 3, 3) = bt.asDiagonal();
+			B.block(3, 0, 3, 3) = bt.asDiagonal() * this->Rsb_c;
 			Eigen::Vector<double, 8> ft;
 			ft.setConstant(this->step_t);
 			A.block(6, 6, 8, 8).setIdentity();
