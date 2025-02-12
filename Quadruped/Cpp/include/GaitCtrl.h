@@ -22,6 +22,7 @@ namespace Quadruped
 		Eigen::Vector3d calFootPos(int legID, Eigen::Vector2d vxyTargetGlobal, double dYawTarget, double phase);
 		Eigen::Vector3d calFootPosW(int legID, Eigen::Vector2d vxyTargetGlobal, double dYawTarget, double phase);
 		void initExpectK(Eigen::Vector3d _k);// 初始化期望运动控制参数
+		void _updateFootPoints();// 更新中性立足点
 		void initSwingParams(double _period, double _stancePhaseRatio, Eigen::Vector4d _bias, double _t);// 初始化摆动相关参数
 		void calcWave(Eigen::Vector4d& phase, Eigen::Vector4i& contact, WaveStatus status, double _t);
 		void calcContactPhase(WaveStatus status, double _t);
@@ -88,21 +89,20 @@ namespace Quadruped
 			initLeg[i].setZero();
 		}
 		
-		initLeg[RB](0) = bodyController->bodyObject->initRbLegXYPosition(0);
-		initLeg[RB](1) = bodyController->bodyObject->initRbLegXYPosition(1);
-		initLeg[LB](0) = bodyController->bodyObject->initRbLegXYPosition(0);
-		initLeg[LB](1) = - bodyController->bodyObject->initRbLegXYPosition(1);
-		initLeg[RF](0) = - bodyController->bodyObject->initRbLegXYPosition(0);
-		initLeg[RF](1) = bodyController->bodyObject->initRbLegXYPosition(1);
-		initLeg[LF](0) = - bodyController->bodyObject->initRbLegXYPosition(0);
-		initLeg[LF](1) = - bodyController->bodyObject->initRbLegXYPosition(1);
+		initLeg[RB](0) = bodyController->bodyObject->initLegsXYPosition(0,RB);
+		initLeg[RB](1) = bodyController->bodyObject->initLegsXYPosition(1,RB);
+		initLeg[LB](0) = bodyController->bodyObject->initLegsXYPosition(0,LB);
+		initLeg[LB](1) = bodyController->bodyObject->initLegsXYPosition(1,LB);
+		initLeg[RF](0) = bodyController->bodyObject->initLegsXYPosition(0,RF);
+		initLeg[RF](1) = bodyController->bodyObject->initLegsXYPosition(1,RF);
+		initLeg[LF](0) = bodyController->bodyObject->initLegsXYPosition(0,LF);
+		initLeg[LF](1) = bodyController->bodyObject->initLegsXYPosition(1,LF);
 		for (int i = 0; i < 4; i++)
 		{
 			feetRadius(i) = sqrt(pow(initLeg[i](0), 2) + pow(initLeg[i](1), 2));
 			feetInitAngle(i) = atan2(initLeg[i](1), initLeg[i](0));
 		}
 		dt = 0.001 * timeStep;
-		// TODO: Tstance和Tswing计算
 	}
 
 	void GaitCtrl::initExpectK(Eigen::Vector3d _k)
@@ -110,6 +110,23 @@ namespace Quadruped
 		kx = _k(0);
 		ky = _k(1);
 		kyaw = _k(2);
+	}
+
+	void GaitCtrl::_updateFootPoints()
+	{
+		initLeg[RB](0) = bodyController->bodyObject->initLegsXYPosition(0, RB);
+		initLeg[RB](1) = bodyController->bodyObject->initLegsXYPosition(1, RB);
+		initLeg[LB](0) = bodyController->bodyObject->initLegsXYPosition(0, LB);
+		initLeg[LB](1) = bodyController->bodyObject->initLegsXYPosition(1, LB);
+		initLeg[RF](0) = bodyController->bodyObject->initLegsXYPosition(0, RF);
+		initLeg[RF](1) = bodyController->bodyObject->initLegsXYPosition(1, RF);
+		initLeg[LF](0) = bodyController->bodyObject->initLegsXYPosition(0, LF);
+		initLeg[LF](1) = bodyController->bodyObject->initLegsXYPosition(1, LF);
+		for (int i = 0; i < 4; i++)
+		{
+			feetRadius(i) = sqrt(pow(initLeg[i](0), 2) + pow(initLeg[i](1), 2));
+			feetInitAngle(i) = atan2(initLeg[i](1), initLeg[i](0));
+		}
 	}
 
 	void GaitCtrl::initSwingParams(double _period, double _stancePhaseRatio, Eigen::Vector4d _bias, double _t)
@@ -127,6 +144,7 @@ namespace Quadruped
 
 	Eigen::Vector3d GaitCtrl::calFootPos(int legID, Eigen::Vector2d vxyTargetGlobal, double dYawTarget, double phase)
 	{
+		this->_updateFootPoints();
 		// 计算xy平面的落脚点规划
 		bodyVelGlobal = bodyController->currentBalanceState.p_dot;
 		bodyWGlobal = bodyController->currentBalanceState.r_dot;

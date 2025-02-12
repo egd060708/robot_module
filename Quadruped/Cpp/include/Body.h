@@ -66,7 +66,7 @@ namespace Quadruped
         Vector3d g = Vector3d(0, 0, -9.81); // 直接初始化重力加速度向量
         double dt;                          // 控制周期
 
-        Vector3d initRbLegXYPosition; // 指定右后腿初始（平面）位置
+        Eigen::Matrix<double,3,4> initLegsXYPosition; // 指定右后腿初始（平面）位置
 
         // 将向量转换成角对称矩阵
         Matrix3d v3_to_m3(Vector3d _v);
@@ -76,7 +76,9 @@ namespace Quadruped
         /* 构造函数，绑定四个腿部状态描述类型 */
         Body(EstBase* _est, Leg* _legObj[4], double _dt);
         /* 初始化函数，用于初始化物理参数 */
-        void initParams(Vector3d _leg2body, Vector3d _initRbLegXYPosition, double _Mb[3], Vector<double, 6> _Ib[3], Vector3d _Pb[3]);
+        void initParams(Vector3d _leg2body, Eigen::Matrix<double, 3, 4> _initLegsXYPosition, double _Mb[3], Vector<double, 6> _Ib[3], Vector3d _Pb[3]);
+        /* 更新中性立足点 */
+        void updateLegsXYPosition(Eigen::Matrix<double, 3, 4> _initLegsXYPosition);
         /* 计算齐次变换矩阵(direction为1，则是当前；为 - 1，则是目标) */
         void calTbs(int8_t direction);
         /* 四足运动学：改变四条腿足端的位置从而改变机器人机身的位置和姿态
@@ -126,7 +128,7 @@ namespace Quadruped
         this->dt = _dt;
     }
 
-    void Body::initParams(Vector3d _leg2body, Vector3d _initRbLegXYPosition, double _Mb[3], Vector<double, 6> _Ib[3], Vector3d _Pb[3])
+    void Body::initParams(Vector3d _leg2body, Eigen::Matrix<double,3,4> _initLegsXYPosition, double _Mb[3], Vector<double, 6> _Ib[3], Vector3d _Pb[3])
     {
         // 腿部坐标系到机身坐标系的位置偏移
         this->leg2body[LF] = _leg2body;
@@ -138,7 +140,7 @@ namespace Quadruped
         tmp(1) = tmp(1) * -1;
         this->leg2body[LB] = tmp;
         // 对于对称的步态定义一个初始参数，描述的是中性立足点
-        this->initRbLegXYPosition = _initRbLegXYPosition;
+        this->initLegsXYPosition = _initLegsXYPosition;
       /*  this->M = Eigen::Map<Matrix3d>(_M.data(),3,3);
         this->Ib = Eigen::Map<Matrix3d>(_Ib.data(),3,3);*/
         for (int i = 0; i < 3; i++)
@@ -147,6 +149,11 @@ namespace Quadruped
             this->Ib[i] = _Ib[i];
             this->Pb[i] = _Pb[i];
         }
+    }
+
+    void Body::updateLegsXYPosition(Eigen::Matrix<double, 3, 4> _initLegsXYPosition)
+    {
+        this->initLegsXYPosition = _initLegsXYPosition;
     }
 
     Matrix3d Body::v3_to_m3(Vector3d _v)
