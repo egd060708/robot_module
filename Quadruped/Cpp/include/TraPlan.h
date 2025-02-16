@@ -3,6 +3,7 @@
 #include <Eigen/Dense>
 #include "mpcCal.h"
 #include <iostream>
+#include "mathTool.h"
 
 using namespace Eigen;
 
@@ -11,7 +12,7 @@ namespace Quadruped {
 	class PlanBase {
 	protected:
 		/* 机身的轨迹规划 */
-		Vector3d Pbt,Pbc,Vbt,Vbc;
+		Vector3d Pbt,Pbc,Vbt,Vbc,Pwc,Vwc;
 		/* 足端的轨迹规划 */
 		Eigen::Matrix<double, 3, 4> Plt, Plc, Vlt, Vlc;
 		/* 规划结果 */
@@ -53,19 +54,24 @@ namespace Quadruped {
 			this->Plc = _Plc;
 			this->Vlc = _Vlc;
 		}
-		const Vector3d& getBodyPlanPosition()
+		void updateWBodyState(const Vector3d& _Pwc, const Vector3d& _Vwc)
+		{
+			this->Pwc = _Pwc;
+			this->Vwc = _Vwc;
+		}
+		virtual Vector3d getBodyPlanPosition()
 		{
 			return this->Pbr;
 		}
-		const Vector3d& getBodyPlanVelocity()
+		virtual Vector3d getBodyPlanVelocity()
 		{
 			return this->Vbr;
 		}
-		const Eigen::Matrix<double, 3, 4>& getFootPlanPosition()
+		virtual Eigen::Matrix<double, 3, 4> getFootPlanPosition()
 		{
 			return this->Plr;
 		}
-		const Eigen::Matrix<double, 3, 4>& getFootPlanVelocity()
+		virtual Eigen::Matrix<double, 3, 4> getFootPlanVelocity()
 		{
 			return this->Vlr;
 		}
@@ -507,7 +513,13 @@ namespace Quadruped {
 
 			this->bodyAcc = this->traGenerator.getOutput().block(0,0,3,1);
 			this->Vbr = this->Vbr + 0.002 * this->Rsb_c * this->bodyAcc;
+			/*this->Vbr(0) = slopeConstrain(this->Vbr(0), this->Vwc(0), 1., -1.);
+			this->Vbr(1) = slopeConstrain(this->Vbr(1), this->Vwc(1), 1., -1.);*/
+			this->Vbr(2) = constrain(this->Vbr(2), 1., -1.);
 			this->Pbr = this->Pbr + 0.5 * 0.002 * (last_Vbr + this->Vbr);
+			/*this->Pbr(0) = constrain(this->Pbr(0), this->Pbc(0) + 0.5, this->Pbc(0) - 0.5);
+			this->Pbr(1) = constrain(this->Pbr(1), this->Pbc(1) + 0.5, this->Pbc(1) - 0.5);*/
+			this->Pbr(2) = constrain(this->Pbr(2), 0.6, 0.4);
 			last_Vbr = this->Vbr;
 
 			this->footAcc.block(0, 0, 2, 1) = this->traGenerator.getOutput().block(3, 0, 2, 1);
@@ -572,6 +584,41 @@ namespace Quadruped {
 			B.block(14, 3, 8, 8) = ft.asDiagonal();
 			traGenerator.mpc_init(A, B, _Q, _F, _R, _W, 0);
 		}
+		Eigen::Vector3d getBodyPlanPosition() override
+		{
+			Eigen::Vector3d realPbr = this->Pbr;
+			/*realPbr(0) = constrain(realPbr(0), this->Pbc(0) + 1., this->Pbc(0) - 1.);
+			realPbr(1) = constrain(realPbr(1), this->Pbc(1) + 1., this->Pbc(1) - 1.);
+			realPbr(2) = constrain(realPbr(2), 0.6, 0.4);*/
+			return realPbr;
+		}
+		Eigen::Vector3d getBodyPlanVelocity() override
+		{
+			Eigen::Vector3d realVbr = this->Vbr;
+			//realVbr(0) = constrain(realVbr(0), this->Vbr(0) + 2., this->Vbr(0) - 2.);
+			//realVbr(1) = constrain(realVbr(1), this->Vbr(1) + 2., this->Vbr(1) - 2.);
+			//realVbr(2) = constrain(realVbr(2), this->Vbr(2) + 1., this->Vbr(2) - 1.);
+			return realVbr;
+		}
+		Eigen::Matrix<double, 3, 4> getFootPlanPosition() override
+		{
+			return this->Plr;
+		}
+		Eigen::Matrix<double, 3, 4> getFootPlanVelocity() override
+		{
+			Eigen::Matrix<double, 3, 4> fVbr;
+			fVbr.col(0) = this->Rsb_c.transpose() * this->Vbr;
+			fVbr.col(1) = this->Rsb_c.transpose() * this->Vbr;
+			fVbr.col(2) = this->Rsb_c.transpose() * this->Vbr;
+			fVbr.col(3) = this->Rsb_c.transpose() * this->Vbr;
+			//std::cout << fVbr << std::endl;
+			return this->Vlr + fVbr;
+		}
+		Eigen::Vector3d getBodyPlanVelocityB()
+		{
+			return this->Rsb_c * this->Vbr;
+		}
+
 	};
 
 }

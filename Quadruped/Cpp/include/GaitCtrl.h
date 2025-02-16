@@ -3,6 +3,7 @@
 #include <iostream>
 #include "BodyCtrlNew.h"
 #include "LegCtrl.h"
+#include "mathTool.h"
 using namespace std;
 
 #define M_PI 3.14159265358979323846
@@ -20,7 +21,7 @@ namespace Quadruped
 	public:
 		GaitCtrl(CtrlBase* _bc, LegCtrl* _lc[4], int timeStep, Eigen::Vector4d* _gaitPhase, Eigen::Vector4i* _gaitContact);
 		Eigen::Vector3d calFootPos(int legID, Eigen::Vector2d vxyTargetGlobal, double dYawTarget, double phase);
-		Eigen::Vector3d calFootPosW(int legID, Eigen::Vector2d vxyTargetGlobal, double dYawTarget, double phase);
+		Eigen::Vector3d calFootPosW(int legID, Eigen::Vector2d vxyTargetGlobal, double dYawTarget, double phase, double maxStepL);
 		void initExpectK(Eigen::Vector3d _k);// 初始化期望运动控制参数
 		void _updateFootPoints();// 更新中性立足点
 		void initSwingParams(double _period, double _stancePhaseRatio, Eigen::Vector4d _bias, double _t);// 初始化摆动相关参数
@@ -28,7 +29,7 @@ namespace Quadruped
 		void calcContactPhase(WaveStatus status, double _t);
 		
 		void setGait(Eigen::Vector2d vxyTargetGlobal, double dYawTarget, double gaitHeight);
-		void run(Eigen::Matrix<double, 3, 4>& _feetPos, Eigen::Matrix<double, 3, 4>& _feetVel);
+		void run(Eigen::Matrix<double, 3, 4>& _feetPos, Eigen::Matrix<double, 3, 4>& _feetVel, double _maxStepL);
 		Eigen::Vector3d getFootPos(int i);
 		Eigen::Vector3d getFootVel(int i);
 		void restart();
@@ -181,15 +182,24 @@ namespace Quadruped
 		return footPos;
 	}*/
 
-	Eigen::Vector3d GaitCtrl::calFootPosW(int legID, Eigen::Vector2d vxyTargetGlobal, double dYawTarget, double phase)
+	Eigen::Vector3d GaitCtrl::calFootPosW(int legID, Eigen::Vector2d vxyTargetGlobal, double dYawTarget, double phase, double maxStepL)
 	{
 		// 计算xy平面的落脚点规划
 		bodyVelGlobal = bodyController->currentBalanceState.p_dot - bodyController->bodyObject->est->getEstFootVelS();
+		/*if (bodyVelGlobal.block(0, 0, 2, 1).norm() > maxStepL)
+		{
+			bodyVelGlobal.block(0, 0, 2, 1) = bodyVelGlobal.block(0, 0, 2, 1).normalized() * maxStepL;
+		}*/
 		bodyWGlobal = bodyController->currentBalanceState.r_dot;
 
-		nextStep(0) = bodyVelGlobal(0) * (1 - phase) * Tswing + bodyVelGlobal(0) * Tstance / 2 + kx * (vxyTargetGlobal(0) - bodyVelGlobal(0));
-		nextStep(1) = bodyVelGlobal(1) * (1 - phase) * Tswing + bodyVelGlobal(1) * Tstance / 2 + ky * (vxyTargetGlobal(1) - bodyVelGlobal(1));
+		nextStep(0) = bodyVelGlobal(0) * (1 - phase) * Tswing + bodyVelGlobal(0) * Tstance / 2 + kx * (vxyTargetGlobal(0) - bodyController->currentBalanceState.p_dot(0));
+		nextStep(1) = bodyVelGlobal(1) * (1 - phase) * Tswing + bodyVelGlobal(1) * Tstance / 2 + ky * (vxyTargetGlobal(1) - bodyController->currentBalanceState.p_dot(1));
 		nextStep(2) = 0;
+
+		/*if (nextStep.norm() > maxStepL)
+		{
+			nextStep = nextStep.normalized() * maxStepL;
+		}*/
 
 		// 计算旋转状态的落脚点叠加规划
 		yaw = bodyController->currentBalanceState.r(2);
@@ -317,7 +327,7 @@ namespace Quadruped
 		this->gaitHeight = _gaitHeight;
 	}
 
-	void GaitCtrl::run(Eigen::Matrix<double, 3, 4>& _feetPos, Eigen::Matrix<double, 3, 4>& _feetVel)
+	void GaitCtrl::run(Eigen::Matrix<double, 3, 4>& _feetPos, Eigen::Matrix<double, 3, 4>& _feetVel, double _maxStepL)
 	{
 		if (is_firstRun) {
 			//startP = bodyController->bodyObject->est->getEstFeetPosS();
@@ -335,7 +345,7 @@ namespace Quadruped
 				_feetVel.col(i).setZero();
 			}
 			else {
-				endP.col(i) = calFootPosW(i, VxyTarget, dYawTarget, (*gaitPhase)(i));
+				endP.col(i) = calFootPosW(i, VxyTarget, dYawTarget, (*gaitPhase)(i), _maxStepL);
 
 				_feetPos.col(i) = getFootPos(i);
 				_feetVel.col(i) = getFootVel(i);

@@ -305,6 +305,7 @@ public:
 
 class QpwEst : public EstBase {
 public:
+	/* 必备参数 */
 	kelmanFilter<24, 3, 44> estimator;
 	double _largeVariance = 100;// 大的协方差
 	double _czTrust = 0;// 对于腿部参考高度的置信度
@@ -442,7 +443,7 @@ public:
 				_ctTrust[i] = ctWin(_phase(i), 0.1);// 针对触地相位做信任度估计
 				/*_ctTrust = windowFunc(_phase(i), 0.2);*/
 				//_czTrust = czWin(_y(3 * i + 2));// 针对当前设置高度做信任度估计
-				_czTrust = czWin(0);// 针对当前设置高度做信任度估计(暂且设置为0)
+				_czTrust = czWin(_y(2 + i*3) + estimatorState(2));// 针对当前设置高度做信任度估计
 				Eigen::Vector3d _trustM(1, 1, _czTrust);// 获取组合置信度
 				_trustM = _ctTrust[i] * _trustM;
 				_trustM = Eigen::Vector3d::Ones() + _largeVariance * (Eigen::Vector3d::Ones() - _trustM);
