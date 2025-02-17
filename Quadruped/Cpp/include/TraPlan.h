@@ -17,7 +17,7 @@ namespace Quadruped {
 		Eigen::Matrix<double, 3, 4> Plt, Plc, Vlt, Vlc;
 		/* 规划结果 */
 		Vector3d Pbr, Vbr;
-		Eigen::Matrix<double, 3, 4> Plr, Vlr;
+		Eigen::Matrix<double, 3, 4> Plr, Vlr, Pli;
 	public:
 		PlanBase()
 		{
@@ -38,6 +38,7 @@ namespace Quadruped {
 		{
 			this->Pbt = _Pbt;
 			this->Vbt = _Vbt;
+			//std::cout << "tar: " << _Pbt << std::endl;
 		}
 		void updateFootHighLevelTar(const Eigen::Matrix<double, 3, 4>& _Plt, const Eigen::Matrix<double, 3, 4>& _Vlt)
 		{
@@ -48,6 +49,7 @@ namespace Quadruped {
 		{
 			this->Pbc = _Pbc;
 			this->Vbc = _Vbc;
+			//std::cout << "cur: " << _Pbc << std::endl;
 		}
 		void updateFootState(const Eigen::Matrix<double, 3, 4>& _Plc, const Eigen::Matrix<double, 3, 4>& _Vlc)
 		{
@@ -85,6 +87,7 @@ namespace Quadruped {
 		}
 		void setInitFootPlanPosition(const Eigen::Matrix<double, 3, 4>& _Plr)
 		{
+			this->Pli = _Plr;
 			this->Plr = _Plr;
 		}
 		void setInitFootPlanVelocity(const Eigen::Matrix<double, 3, 4>& _Vlr)
@@ -489,8 +492,8 @@ namespace Quadruped {
 			Eigen::Vector3d Py(this->Pbr(0), this->Pbr(1), this->Pbt(2));
 			x.block(0, 0, 3, 1) = this->Pbr;
 			x.block(3, 0, 3, 1) = this->Vbr;
-			y.block(0, 0, 3, 1) = this->Pbt;
-			//y.block(0, 0, 3, 1) = Py;
+			//y.block(0, 0, 3, 1) = this->Pbt;
+			y.block(0, 0, 3, 1) = Py;
 			y.block(3, 0, 3, 1) = this->Vbt;
 
 			static Eigen::Matrix<double, 3, 4> last_Vlr = this->Vlr;
@@ -512,23 +515,50 @@ namespace Quadruped {
 			this->traGenerator.mpc_solve();
 
 			this->bodyAcc = this->traGenerator.getOutput().block(0,0,3,1);
+			// 生成机身速度
 			this->Vbr = this->Vbr + 0.002 * this->Rsb_c * this->bodyAcc;
-			/*this->Vbr(0) = slopeConstrain(this->Vbr(0), this->Vwc(0), 1., -1.);
-			this->Vbr(1) = slopeConstrain(this->Vbr(1), this->Vwc(1), 1., -1.);*/
+			// 速度约束
+			/*this->Vbr(0) = slopeConstrain(this->Vbr(0), this->Vbc(0), 0.1, -0.1);
+			this->Vbr(1) = slopeConstrain(this->Vbr(1), this->Vbc(1), 0.1, -0.1);*/
+			/*this->Vbr(0) = constrain(this->Vbr(0), 2.5, -2.5);
+			this->Vbr(1) = constrain(this->Vbr(1), 2.5, -2.5);*/
 			this->Vbr(2) = constrain(this->Vbr(2), 1., -1.);
+			// 生成机身位置
 			this->Pbr = this->Pbr + 0.5 * 0.002 * (last_Vbr + this->Vbr);
-			/*this->Pbr(0) = constrain(this->Pbr(0), this->Pbc(0) + 0.5, this->Pbc(0) - 0.5);
-			this->Pbr(1) = constrain(this->Pbr(1), this->Pbc(1) + 0.5, this->Pbc(1) - 0.5);*/
+			// 位置约束
+			/*this->Pbr(0) = constrain(this->Pbr(0), this->Pbc(0) + 0.2, this->Pbc(0) - 0.2);
+			this->Pbr(1) = constrain(this->Pbr(1), this->Pbc(1) + 0.2, this->Pbc(1) - 0.2);*/
 			this->Pbr(2) = constrain(this->Pbr(2), 0.6, 0.425);
 			last_Vbr = this->Vbr;
+
+			//std::cout << "gen: " << this->Pbr << std::endl;
 
 			this->footAcc.block(0, 0, 2, 1) = this->traGenerator.getOutput().block(3, 0, 2, 1);
 			this->footAcc.block(0, 1, 2, 1) = this->traGenerator.getOutput().block(5, 0, 2, 1);
 			this->footAcc.block(0, 2, 2, 1) = this->traGenerator.getOutput().block(7, 0, 2, 1);
 			this->footAcc.block(0, 3, 2, 1) = this->traGenerator.getOutput().block(9, 0, 2, 1);
+			// 生成接触点速度
 			this->Vlr = this->Vlr + 0.002 * this->footAcc;
+			// 生成接触点位置
 			this->Plr = this->Plr + 0.5 * 0.002 * (last_Vlr + this->Vlr);
 			last_Vlr = this->Vlr;
+			// 位置约束
+			for (int i = 0; i < 4; i++)
+			{
+				double lLastSquare = 0.8 * 0.8 - this->Pbc(2) * this->Pbc(2);
+				if (lLastSquare > 0)
+				{
+					if ((this->Plr.col(i) - this->Pli.col(i)).squaredNorm() > lLastSquare)
+					{
+						this->Plr.col(i) = this->Pli.col(i) + (this->Plr.col(i) - this->Pli.col(i)).normalized() * sqrt(lLastSquare);
+					}
+				}
+				else
+				{
+					this->Plr.col(i) = this->Pli.col(i);
+				}
+			}
+
 		}
 
 	public:
@@ -586,19 +616,11 @@ namespace Quadruped {
 		}
 		Eigen::Vector3d getBodyPlanPosition() override
 		{
-			Eigen::Vector3d realPbr = this->Pbr;
-			/*realPbr(0) = constrain(realPbr(0), this->Pbc(0) + 1., this->Pbc(0) - 1.);
-			realPbr(1) = constrain(realPbr(1), this->Pbc(1) + 1., this->Pbc(1) - 1.);
-			realPbr(2) = constrain(realPbr(2), 0.6, 0.4);*/
-			return realPbr;
+			return this->Pbr;
 		}
 		Eigen::Vector3d getBodyPlanVelocity() override
 		{
-			Eigen::Vector3d realVbr = this->Vbr;
-			//realVbr(0) = constrain(realVbr(0), this->Vbr(0) + 2., this->Vbr(0) - 2.);
-			//realVbr(1) = constrain(realVbr(1), this->Vbr(1) + 2., this->Vbr(1) - 2.);
-			//realVbr(2) = constrain(realVbr(2), this->Vbr(2) + 1., this->Vbr(2) - 1.);
-			return realVbr;
+			return this->Vbr;
 		}
 		Eigen::Matrix<double, 3, 4> getFootPlanPosition() override
 		{
