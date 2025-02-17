@@ -519,7 +519,7 @@ namespace Quadruped {
 			this->Pbr = this->Pbr + 0.5 * 0.002 * (last_Vbr + this->Vbr);
 			/*this->Pbr(0) = constrain(this->Pbr(0), this->Pbc(0) + 0.5, this->Pbc(0) - 0.5);
 			this->Pbr(1) = constrain(this->Pbr(1), this->Pbc(1) + 0.5, this->Pbc(1) - 0.5);*/
-			this->Pbr(2) = constrain(this->Pbr(2), 0.6, 0.4);
+			this->Pbr(2) = constrain(this->Pbr(2), 0.6, 0.425);
 			last_Vbr = this->Vbr;
 
 			this->footAcc.block(0, 0, 2, 1) = this->traGenerator.getOutput().block(3, 0, 2, 1);

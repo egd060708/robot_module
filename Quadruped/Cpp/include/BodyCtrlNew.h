@@ -829,8 +829,9 @@ namespace Quadruped
     public:
         // 机器人平衡控制器
         mpcCal<23, 16, 28, 1, 5> balanceController;
-        double u = 1;// 摩擦系数
-        double force_c = 1000;// 输出力限制限制
+        double u = 0.7;// 摩擦系数
+        double force_cz = 750;// 输出竖直力限制限制
+        double force_cxy = 550;// 输出水平力矩限制
         double tau_c = 20; // 输出力矩限制
         Eigen::Vector3d g = Eigen::Vector3d(0, 0, -9.81);
         double fftauRatio[4] = { 0.5 };
@@ -877,8 +878,15 @@ namespace Quadruped
             B.setZero();
             Q.setZero();
             R.setZero();
-            lb.block(0, 0, 12, 1).setConstant(-force_c);
-            ub.block(0, 0, 12, 1).setConstant(force_c);
+            for (int i = 0; i < 4; i++)
+            {
+                lb(3 * i, 0) = -force_cxy;
+                lb(3 * i + 1, 0) = -force_cxy;
+                lb(3 * i + 2, 0) = -force_cz;
+                ub(3 * i, 0) = force_cxy;
+                ub(3 * i + 1, 0) = force_cxy;
+                ub(3 * i + 2, 0) = force_cz;
+            }
             lb.block(12, 0, 4, 1).setConstant(-tau_c);
             ub.block(12, 0, 4, 1).setConstant(tau_c);
             cA.setZero();
@@ -908,6 +916,8 @@ namespace Quadruped
         void updateDynamic() override;
         // 导入权重参数
         void importWeight(const VectorXd& _Q, const VectorXd& _F, const VectorXd& _R, const VectorXd& _W) override;
+        // 导入力参数
+        void importForce(const double& _force_cz, const double& _force_cxy, const double& _u, const double& _tau_c);
         // 更新当前状态
         void updateBalanceState() override;
         // 设置终端目标
@@ -916,14 +926,12 @@ namespace Quadruped
         // 执行mpc控制器
         void mpc_adjust(const VectorX<bool>& _enList) override;
         // 设置接触约束
-        void setContactConstrain(const Vector4i& _contact);
+        void setContactConstrain(const Vector4i& _contact, Eigen::Matrix<double, 3, 4>& _swingForce);
         // 直接设置四足输出
         void setLegsForce(const Eigen::Matrix<double, 3, 4>& _force, const Eigen::Vector4d& _tau);
         // 四足腾空处理
         void contactDeal(const VectorXd& _oriQ, const double _ffRatio, const double _stRatio);
     };
-
-
 
     void QpwPVCtrl::updateDynamic()
     {
@@ -971,6 +979,14 @@ namespace Quadruped
             R(j, j) = _R(j);
             W(j, j) = _W(j);
         }
+    }
+
+    void QpwPVCtrl::importForce(const double& _force_cz, const double& _force_cxy, const double& _u, const double& _tau_c)
+    {
+        this->force_cz = _force_cz;
+        this->force_cxy = _force_cxy;
+        this->u = _u;
+        this->tau_c = _tau_c;
     }
 
     void QpwPVCtrl::updateBalanceState()
@@ -1048,7 +1064,7 @@ namespace Quadruped
         }
     }
 
-    void QpwPVCtrl::setContactConstrain(const Vector4i& _contact)
+    void QpwPVCtrl::setContactConstrain(const Vector4i& _contact, Eigen::Matrix<double, 3, 4>& _swingForce)
     {
         Eigen::Matrix<double, 5, 3> _fcA;
         _fcA.setZero();
@@ -1076,13 +1092,22 @@ namespace Quadruped
                 _tcA(1 + 2 * i, 2 + 3 * i) = 0;
                 _tcA(0 + 2 * i, 12 + i) = 1.;
                 _tcA(1 + 2 * i, 12 + i) = 0;
+                // 如果不接触那么就更新摆动力到mpc控制器中
+                this->balanceController.updateLastU(_swingForce.col(i), i * 3, 3);
             }
             this->cA.block<5, 3>(5 * i, 3 * i) = _fcA;
             this->Aub.block<5, 1>(5 * i, 0) = _Aub;
         }
         this->cA.block(20, 0, 8, 16) = _tcA;
-        lb.block(0, 0, 12, 1).setConstant(-force_c);
-        ub.block(0, 0, 12, 1).setConstant(force_c);
+        for (int i = 0; i < 4; i++)
+        {
+            lb(3 * i, 0) = -force_cxy;
+            lb(3 * i + 1, 0) = -force_cxy;
+            lb(3 * i + 2, 0) = -force_cz;
+            ub(3 * i, 0) = force_cxy;
+            ub(3 * i + 1, 0) = force_cxy;
+            ub(3 * i + 2, 0) = force_cz;
+        }
         lb.block(12, 0, 4, 1).setConstant(-tau_c);
         ub.block(12, 0, 4, 1).setConstant(tau_c);
     }
