@@ -50,6 +50,7 @@ namespace Quadruped
         Leg* legs[4];
         Vector3d leg2body[4];                  // 第一个值代表左前腿向量
         Matrix3d Rsb_c = Matrix3d::Identity(); // (当前)世界坐标系到机身坐标系的旋转矩阵映射
+        Matrix3d Rsbh_c = Matrix3d::Identity();// (当前)世界坐标系到机身水平坐标系的旋转矩阵映射
         Matrix4d Tsb_c = Matrix4d::Identity(); // (当前)世界坐标系到机身坐标系的齐次变换映射
         Matrix3d Rsb_t = Matrix3d::Identity(); // (目标)世界坐标系到机身坐标系的旋转矩阵映射
         Matrix4d Tsb_t = Matrix4d::Identity(); // (目标)世界坐标系到机身坐标系的齐次变换映射
@@ -190,6 +191,8 @@ namespace Quadruped
             std::cout << "ext: \n" << _extR << std::endl;
             std::cout << "all: \n" << Rsb_c << std::endl;*/
             currentBodyState.Ang_xyz = rotMatToRPY(Rsb_c);
+            Eigen::AngleAxisd rotationz_c(currentBodyState.Ang_xyz(2), Eigen::Vector3d::UnitZ());
+            Rsbh_c = rotationz_c.toRotationMatrix();
             Tsb_c.block<3, 3>(0, 0) = Rsb_c;
             Tsb_c.block<3, 1>(0, 3) = currentWorldState.dist;
             // 更新其他世界坐标系下的变量

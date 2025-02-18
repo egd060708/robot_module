@@ -955,16 +955,16 @@ namespace Quadruped
         // 为了减少计算量，轮速规划是基于车体坐标系的，因此要对世界坐标系的力做映射
         Eigen::Matrix<double, 4, 3> s = Eigen::Matrix<double, 4, 3>::Zero();
         s(0, 0) = -fftauRatio[0];
-        dynamicLeft.block(6, 0, 4, 3) = s * bodyObject->Rsb_c.transpose();
+        dynamicLeft.block(6, 0, 4, 3) = s * bodyObject->Rsbh_c.transpose();
         s(0, 0) = 0;
         s(1, 0) = -fftauRatio[1];
-        dynamicLeft.block(6, 3, 4, 3) = s * bodyObject->Rsb_c.transpose();
+        dynamicLeft.block(6, 3, 4, 3) = s * bodyObject->Rsbh_c.transpose();
         s(1, 0) = 0;
         s(2, 0) = -fftauRatio[2];
-        dynamicLeft.block(6, 6, 4, 3) = s * bodyObject->Rsb_c.transpose();
+        dynamicLeft.block(6, 6, 4, 3) = s * bodyObject->Rsbh_c.transpose();
         s(2, 0) = 0;
         s(3, 0) = -fftauRatio[3];
-        dynamicLeft.block(6, 9, 4, 3) = s * bodyObject->Rsb_c.transpose();
+        dynamicLeft.block(6, 9, 4, 3) = s * bodyObject->Rsbh_c.transpose();
     }
 
     void QpwPVCtrl::importWeight(const VectorXd& _Q, const VectorXd& _F, const VectorXd& _R, const VectorXd& _W)
@@ -1002,8 +1002,8 @@ namespace Quadruped
         {
             /*currentBalanceState.pe(i) = bodyObject->est->getEstFeetPosB(i)(0);
             currentBalanceState.pe_dot(i) = bodyObject->est->getEstFeetVelB(i)(0);*/
-            currentBalanceState.pe(i) = bodyObject->currentBodyState.leg_b[i].Position(0);
-            currentBalanceState.pe_dot(i) = bodyObject->currentBodyState.leg_b[i].VelocityW(0);
+            currentBalanceState.pe(i) = (bodyObject->Rsb_c * bodyObject->Rsbh_c.transpose() * bodyObject->currentBodyState.leg_b[i].Position)(0);
+            currentBalanceState.pe_dot(i) = (bodyObject->Rsbh_c.transpose() * bodyObject->currentWorldState.leg_s[i].VelocityW)(0);
         }
         //std::cout << "cbpe: \n" << currentBalanceState.pe_dot << std::endl;
     }

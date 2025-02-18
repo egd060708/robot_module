@@ -18,6 +18,9 @@ namespace Quadruped {
 		/* 规划结果 */
 		Vector3d Pbr, Vbr;
 		Eigen::Matrix<double, 3, 4> Plr, Vlr, Pli;
+		/* 坐标转换 */
+		Eigen::Matrix3d Rsb_c;
+		Eigen::Matrix3d Rsbh_c;
 	public:
 		PlanBase()
 		{
@@ -34,6 +37,11 @@ namespace Quadruped {
 			this->Plr.setZero();
 			this->Vlr.setZero();
 		}
+		void updateRsb(const Matrix3d& _Rsb, const Matrix3d& _Rsbh)
+		{
+			this->Rsb_c = _Rsb;
+			this->Rsbh_c = _Rsbh;
+		}
 		void updateBodyHighLevelTar(const Vector3d& _Pbt, const Vector3d& _Vbt)
 		{
 			this->Pbt = _Pbt;
@@ -42,6 +50,10 @@ namespace Quadruped {
 		}
 		void updateFootHighLevelTar(const Eigen::Matrix<double, 3, 4>& _Plt, const Eigen::Matrix<double, 3, 4>& _Vlt)
 		{
+			/*for (int i = 0; i < 4; i++)
+			{
+				this->Plt.col(i) = this->Rsb_c.transpose() * _Plt.col(i);
+			}*/
 			this->Plt = _Plt;
 			this->Vlt = _Vlt;
 		}
@@ -200,8 +212,6 @@ namespace Quadruped {
 		mpcCal<16, 8, 16, 1, 10> traFootGenerator;
 		/* 足端mpc输出观测 */
 		Eigen::Matrix<double, 3, 4> footAcc;
-		/* 坐标转换 */
-		Eigen::Matrix3d Rsb_c;
 
 		/* 更新机身不等式约束 */
 		void updateBodyIeqConstrain(const Vector3d& _aMax)
@@ -239,7 +249,7 @@ namespace Quadruped {
 			this->traBodyGenerator.mpc_update(y, x, 100, 1.);
 			this->traBodyGenerator.mpc_solve();
 			this->bodyAcc = this->traBodyGenerator.getOutput();
-			this->Vbr = this->Vbr + 0.002 * this->Rsb_c * this->bodyAcc;
+			this->Vbr = this->Vbr + 0.002 * this->Rsbh_c * this->bodyAcc;
 			this->Pbr = this->Pbr + 0.5 * 0.002 * (last_Vbr + this->Vbr);
 			last_Vbr = this->Vbr;
 		}
@@ -314,6 +324,7 @@ namespace Quadruped {
 			this->Plr.setZero();
 			this->Vlr.setZero();
 			this->Rsb_c.setIdentity();
+			this->Rsbh_c.setIdentity();
 		}
 		/* 规划器预热 */
 		void warmUp()
@@ -333,9 +344,8 @@ namespace Quadruped {
 			this->getFootSolution();
 		}
 		/* 更新规划器参数 */
-		void updateBodyParams(const Eigen::Matrix3d& _Rsbc, const double& _t, const double& _balanceMargin, const Eigen::Matrix<double, 6, 6>& _Q, const Eigen::Matrix<double, 6, 6>& _F, const Eigen::Matrix<double, 3, 3>& _R, const Eigen::Matrix<double, 3, 3>& _W)
+		void updateBodyParams(const double& _t, const double& _balanceMargin, const Eigen::Matrix<double, 6, 6>& _Q, const Eigen::Matrix<double, 6, 6>& _F, const Eigen::Matrix<double, 3, 3>& _R, const Eigen::Matrix<double, 3, 3>& _W)
 		{
-			this->Rsb_c = _Rsbc;
 			this->body_step_t = _t;
 			this->balanceMargin = _balanceMargin;
 			// 初始化轨迹生成器
@@ -349,7 +359,7 @@ namespace Quadruped {
 			st.setConstant(this->body_step_t);
 			A.block(0, 3, 3, 3) = st.asDiagonal();
 			A.block(3, 3, 3, 3).setIdentity();
-			B.block(3, 0, 3, 3) = st.asDiagonal()*this->Rsb_c;
+			B.block(3, 0, 3, 3) = st.asDiagonal()*this->Rsbh_c;
 			traBodyGenerator.mpc_init(A, B, _Q, _F, _R, _W, 0);
 		}
 		void updateFootParams(const double& _t, const double& _balanceMarginX, const double& _balanceMarginY, const Eigen::Matrix<double, 16, 16>& _Q, const Eigen::Matrix<double, 16, 16>& _F, const Eigen::Matrix<double, 8, 8>& _R, const Eigen::Matrix<double, 8, 8>& _W)
@@ -406,8 +416,6 @@ namespace Quadruped {
 		/* mpc预测输出 */
 		Eigen::Vector<double, 3> bodyAcc;
 		Eigen::Matrix<double, 3, 4> footAcc;
-		/* 坐标转换 */
-		Eigen::Matrix3d Rsb_c;
 		/* 足端加速度约束与机身稳定裕度的比例 */
 		double fbp;
 
@@ -516,7 +524,7 @@ namespace Quadruped {
 
 			this->bodyAcc = this->traGenerator.getOutput().block(0,0,3,1);
 			// 生成机身速度
-			this->Vbr = this->Vbr + 0.002 * this->Rsb_c * this->bodyAcc;
+			this->Vbr = this->Vbr + 0.002 * this->Rsbh_c * this->bodyAcc;
 			// 速度约束
 			/*this->Vbr(0) = slopeConstrain(this->Vbr(0), this->Vbc(0), 0.1, -0.1);
 			this->Vbr(1) = slopeConstrain(this->Vbr(1), this->Vbc(1), 0.1, -0.1);*/
@@ -571,6 +579,7 @@ namespace Quadruped {
 			this->Plr.setZero();
 			this->Vlr.setZero();
 			this->Rsb_c.setIdentity();
+			this->Rsbh_c.setIdentity();
 			fbp = 1.;
 		}
 		/* 规划器预热 */
@@ -588,9 +597,8 @@ namespace Quadruped {
 			this->traGenerator.setConstrain(lb, ub);
 			this->getJointSolution();
 		}
-		void updateJointParams(const Eigen::Matrix3d& _Rsbc, double _t, double _fbp, double _bMarginX, double _bMarginY, const Eigen::Matrix<double, 22, 22>& _Q, const Eigen::Matrix<double, 22, 22>& _F, const Eigen::Matrix<double, 11, 11>& _R, const Eigen::Matrix<double, 11, 11>& _W)
+		void updateJointParams(double _t, double _fbp, double _bMarginX, double _bMarginY, const Eigen::Matrix<double, 22, 22>& _Q, const Eigen::Matrix<double, 22, 22>& _F, const Eigen::Matrix<double, 11, 11>& _R, const Eigen::Matrix<double, 11, 11>& _W)
 		{
-			this->Rsb_c = _Rsbc;
 			this->step_t = _t;
 			this->fbp = _fbp;
 			this->balanceMarginX = _bMarginX;
@@ -605,7 +613,7 @@ namespace Quadruped {
 			A.block(0, 0, 3, 3).setIdentity();
 			A.block(0, 3, 3, 3) = bt.asDiagonal();
 			A.block(3, 3, 3, 3).setIdentity();
-			B.block(3, 0, 3, 3) = bt.asDiagonal() * this->Rsb_c;
+			B.block(3, 0, 3, 3) = bt.asDiagonal() * this->Rsbh_c;
 			Eigen::Vector<double, 8> ft;
 			ft.setConstant(this->step_t);
 			A.block(6, 6, 8, 8).setIdentity();
