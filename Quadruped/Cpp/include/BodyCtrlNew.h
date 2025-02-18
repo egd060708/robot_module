@@ -1000,8 +1000,6 @@ namespace Quadruped
         currentBalanceState.r_dot = bodyObject->currentWorldState.angVel_xyz;
         for (int i = 0; i < 4; i++)
         {
-            /*currentBalanceState.pe(i) = bodyObject->est->getEstFeetPosB(i)(0);
-            currentBalanceState.pe_dot(i) = bodyObject->est->getEstFeetVelB(i)(0);*/
             currentBalanceState.pe(i) = (bodyObject->Rsb_c * bodyObject->Rsbh_c.transpose() * bodyObject->currentBodyState.leg_b[i].Position)(0);
             currentBalanceState.pe_dot(i) = (bodyObject->Rsbh_c.transpose() * bodyObject->currentWorldState.leg_s[i].VelocityW)(0);
         }

@@ -273,8 +273,8 @@ namespace Quadruped
             currentBodyState.leg_b[i].VelocityG = legs[i]->currentLeg.VelocityG;
             // 计算足端相对于世界坐标系的速度
             currentWorldState.leg_s[i].Velocity = Rsb_c * (w * currentBodyState.leg_b[i].Position + legs[i]->currentLeg.Velocity);
-            currentWorldState.leg_s[i].VelocityW = Rsb_c * legs[i]->currentLeg.VelocityW;
-            currentWorldState.leg_s[i].VelocityG = Rsb_c * (w * currentBodyState.leg_b[i].Position + legs[i]->currentLeg.VelocityG);
+            currentWorldState.leg_s[i].VelocityW = Rsbh_c * legs[i]->currentLeg.VelocityW;
+            currentWorldState.leg_s[i].VelocityG = currentWorldState.leg_s[i].Velocity + currentWorldState.leg_s[i].VelocityW;
         }
     }
 
