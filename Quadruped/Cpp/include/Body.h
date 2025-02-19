@@ -5,6 +5,7 @@
 #include "kelmanFilter.h"
 #include "RobotEst.h"
 
+#define CUTOFFHZ 50
 
 namespace Quadruped
 {
@@ -20,10 +21,11 @@ namespace Quadruped
     typedef struct _worldFrame
     {
         LegS leg_s[4];
+        Vector4i contactEst = Vector4i::Zero(); // 接触预测
         Vector3d dist = Vector3d::Zero();       // 机身在世界坐标系下的位移
         Vector3d angVel_xyz = Vector3d::Zero(); // 角速度
         Vector3d linVel_xyz = Vector3d::Zero(); // 线速度
-        // Vector3d angAcc_xyz = Vector3d::Zero(); // 角加速度
+         Vector3d angAcc_xyz = Vector3d::Zero(); // 角加速度
         Vector3d linAcc_xyz = Vector3d::Zero(); // 线性加速度
     } worldFrame;
     // 机器人坐标系下的状态，坐标系表示为{b}
@@ -34,7 +36,7 @@ namespace Quadruped
         Vector4d Quat = Vector4d::Zero();       //四元数
         Vector3d angVel_xyz = Vector3d::Zero(); // 角速度
         Vector3d linVel_xyz = Vector3d::Zero(); // 线速度
-        //Vector3d angAcc_xyz = Vector3d::Zero(); // 角加速度
+        Vector3d angAcc_xyz = Vector3d::Zero(); // 角加速度
         Vector3d linAcc_xyz = Vector3d::Zero(); // 线性加速度
     } bodyFrame;
 
@@ -87,10 +89,14 @@ namespace Quadruped
         void legAndBodyPosition(int8_t direction);
         /* 计算机身坐标系与世界坐标系下的足端位置转换(世界坐标系定义为初始状态下右后腿足端位置)（direction为1，则是(当前)身->世；为 - 1，则是(目标)世->身）*/
         void bodyAndWorldFramePosition(int8_t direction);
-        /* 计算足端在世界坐标系中的足端速度 */
+        /* 计算足端在世界坐标系中的足端相对于机身的速度 */
         void legVelocityInWorldFrame();
+        /* 计算足端再世界坐标系中的加速度 */
+        void legAccInWorldFrame();
         /* 更新整机等效重心和惯量参数 */
         void updateEqBody();
+        /* 接触预测 */
+        void estimateContact(const Vector4i& _contact_t);
 
         /* 更新目标位姿 */
         void updateBodyTargetPos(Vector3d _angle, Vector3d _position);
@@ -99,6 +105,7 @@ namespace Quadruped
         void updateBodyImu(Vector4d _imyQ);
         /* 更新陀螺仪角速度 */
         void updateBodyGyro(Vector3d _gyro);
+        void updateBodyGyroAcc(Vector3d _gyroAcc);
         /* 更新加速度计加速度 */
         void updateBodyAcc(Vector3d _acc);
         /* 更新目标四足点(地面) */
@@ -230,6 +237,10 @@ namespace Quadruped
             currentBodyState.leg_b[RF].Position = legs[RF]->currentLeg.Position + this->leg2body[RF];
             currentBodyState.leg_b[RB].Position = legs[RB]->currentLeg.Position + this->leg2body[RB];
             currentBodyState.leg_b[LB].Position = legs[LB]->currentLeg.Position + this->leg2body[LB];
+            currentBodyState.leg_b[LF].Force = legs[LF]->currentLeg.Force;
+            currentBodyState.leg_b[RF].Force = legs[RF]->currentLeg.Force;
+            currentBodyState.leg_b[RB].Force = legs[RB]->currentLeg.Force;
+            currentBodyState.leg_b[LB].Force = legs[LB]->currentLeg.Force;
         }
         else if (direction == -1)
         {
@@ -250,6 +261,7 @@ namespace Quadruped
                 Pbi.block<3, 1>(0, 0) = currentBodyState.leg_b[i].Position;
                 Vector4d Psi = this->Tsb_c * Pbi;
                 currentWorldState.leg_s[i].Position = Psi.block<3, 1>(0, 0);
+                currentWorldState.leg_s[i].Force = this->Rsb_c * currentBodyState.leg_b[i].Force;
             }
             else if (direction == -1)
             {
@@ -263,10 +275,10 @@ namespace Quadruped
 
     void Body::legVelocityInWorldFrame()
     {
+        // 将机身旋转角速度向量转换成反对称矩阵
+        Matrix3d w = v3_to_m3(currentBodyState.angVel_xyz);
         for (int i = 0; i < 4; i++)
         {
-            // 将机身旋转角速度向量转换成反对称矩阵
-            Matrix3d w = v3_to_m3(currentBodyState.angVel_xyz);
             // 更新足端相对于机身坐标系的速度
             currentBodyState.leg_b[i].Velocity = legs[i]->currentLeg.Velocity;
             currentBodyState.leg_b[i].VelocityW = legs[i]->currentLeg.VelocityW;
@@ -275,6 +287,20 @@ namespace Quadruped
             currentWorldState.leg_s[i].Velocity = Rsb_c * (w * currentBodyState.leg_b[i].Position + legs[i]->currentLeg.Velocity);
             currentWorldState.leg_s[i].VelocityW = Rsbh_c * legs[i]->currentLeg.VelocityW;
             currentWorldState.leg_s[i].VelocityG = currentWorldState.leg_s[i].Velocity + currentWorldState.leg_s[i].VelocityW;
+        }
+    }
+
+    void Body::legAccInWorldFrame()
+    {
+        // 将机身旋转角速度向量转换成反对称矩阵
+        Matrix3d w = v3_to_m3(currentBodyState.angVel_xyz);
+        Matrix3d w_dot = v3_to_m3(currentBodyState.angAcc_xyz);
+        for (int i = 0; i < 4; i++)
+        {
+            // 更新足端相对于机身坐标系的加速度
+            currentBodyState.leg_b[i].Acc = legs[i]->currentLeg.Acc;
+            // 更新足端相对于世界坐标系的加速度
+            currentWorldState.leg_s[i].Acc = currentWorldState.linAcc_xyz + Rsb_c * (w_dot * currentBodyState.leg_b[i].Position + w * w * currentBodyState.leg_b[i].Position + legs[i]->currentLeg.Acc);
         }
     }
 
@@ -329,6 +355,22 @@ namespace Quadruped
 
     }
 
+    void Body::estimateContact(const Vector4i& _contact_t)
+    {
+        static LPF_SecondOrder_Classdef extForceF[4][3] = { {LPF_SecondOrder_Classdef(CUTOFFHZ,500),LPF_SecondOrder_Classdef(CUTOFFHZ,500),LPF_SecondOrder_Classdef(CUTOFFHZ,500)},\
+                                                            {LPF_SecondOrder_Classdef(CUTOFFHZ, 500), LPF_SecondOrder_Classdef(CUTOFFHZ, 500), LPF_SecondOrder_Classdef(CUTOFFHZ, 500)},\
+                                                            {LPF_SecondOrder_Classdef(CUTOFFHZ, 500), LPF_SecondOrder_Classdef(CUTOFFHZ, 500), LPF_SecondOrder_Classdef(CUTOFFHZ, 500)},\
+                                                            {LPF_SecondOrder_Classdef(CUTOFFHZ, 500), LPF_SecondOrder_Classdef(CUTOFFHZ, 500), LPF_SecondOrder_Classdef(CUTOFFHZ, 500)} };
+        this->targetWorldState.contactEst = _contact_t;
+        for (int i = 0; i < 4; i++)
+        {
+            Vector3d extForce = this->legs[i]->Mc[3] * (this->currentWorldState.leg_s[i].Acc/* - Vector3d(0, 0, -9.81)*/)/* - this->currentWorldState.leg_s[i].Force*/;
+            this->currentWorldState.leg_s[i].extForce(0) = extForceF[i][0].f(extForce(0));
+            this->currentWorldState.leg_s[i].extForce(1) = extForceF[i][1].f(extForce(1));
+            this->currentWorldState.leg_s[i].extForce(2) = extForceF[i][2].f(extForce(2));
+        }
+    }
+
     void Body::updateBodyTargetPos(Vector3d _angle, Vector3d _position)
     {
         targetBodyState.Ang_xyz = _angle;
@@ -348,6 +390,11 @@ namespace Quadruped
     void Body::updateBodyGyro(Vector3d _gyro)
     {
         currentBodyState.angVel_xyz = _gyro;
+    }
+
+    void Body::updateBodyGyroAcc(Vector3d _gyroAcc)
+    {
+        currentBodyState.angAcc_xyz = _gyroAcc;
     }
 
     void Body::updateBodyAcc(Vector3d _acc)

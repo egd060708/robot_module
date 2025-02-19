@@ -12,23 +12,28 @@ namespace Quadruped
     // 单腿数据结构
     typedef struct _LegS
     {
-        Vector3d Position;
-        Vector3d Velocity;// 雅可比矩阵映射速度
-        Vector3d VelocityW;// 旋转速度
-        Vector3d VelocityG;// 合速度
-        Vector3d Force;
+        Vector3d Position = Vector3d::Zero();
+        Vector3d Velocity = Vector3d::Zero();// 雅可比矩阵映射速度
+        Vector3d Acc = Vector3d::Zero();
+        Vector3d VelocityW = Vector3d::Zero();// 旋转速度
+        Vector3d VelocityG = Vector3d::Zero();// 合速度
+        Vector3d Force = Vector3d::Zero();// 执行的力
+        Vector3d extForce = Vector3d::Zero();// 与外界的接触力
+
     } LegS;
     // 关节数据结构
     typedef struct _JointS
     {
         // 三轴单腿结构
-        Vector3d Angle;
-        Vector3d Velocity;
-        Vector3d Torque;
+        Vector3d Angle = Vector3d::Zero();
+        Vector3d Velocity = Vector3d::Zero();
+        Vector3d Acc = Vector3d::Zero();
+        Vector3d Torque = Vector3d::Zero();
         // 末端执行器结构
-        double Foot_Angle;
-        double Foot_Velocity;
-        double Foot_Torque;
+        double Foot_Angle = 0;
+        double Foot_Velocity = 0;
+        double Foot_Acc = 0;
+        double Foot_Torque = 0;
     } JointS;
 
     // 单腿类型
@@ -39,7 +44,8 @@ namespace Quadruped
         LegS currentLeg;
         JointS targetJoint;
         JointS currentJoint;
-        Matrix3d jacobi;
+        Matrix3d jacobi = Matrix3d::Zero();
+        Matrix3d jacobi_dot = Matrix3d::Zero();
         double L1, L2, L2b, L3, L3b, L4, L4b;// 前三条连杆以及最后两个足端执行器参数
         double Reff; // 末端执行器触地点速度计算等效半径
         Vector3d Pcj[4];// 所有连杆的质心相对其关节位置
@@ -143,11 +149,13 @@ namespace Quadruped
         }
         void updateJointAng(Vector4d _jAngle);          // 更新各关节观测角度
         void updateJointVel(Vector4d _jVel);            // 更新关节观测角速度
+        void updateJointAcc(Vector4d _jAcc);            // 更新关节观测角加速度
         void updateJointTau(Vector4d _jTorque);         // 更新关节观测力矩
         void updateJointAng(Vector3d _jAngle);          // 更新各关节观测角度
         void updateJointVel(Vector3d _jVel);            // 更新关节观测角速度
+        void updateJointAcc(Vector3d _jAcc);            // 更新关节观测角角加速度
         void updateJointTau(Vector3d _jTorque);         // 更新关节观测力矩
-        Matrix3d legJacobi_Cal(JointS &_joint);         // 根据当前电机角速度计算雅可比矩阵
+        void legJacobi_Cal();                           // 根据当前电机角速度计算雅可比矩阵及其微分矩阵
         void legFK_Cal();                               //不涉及接触点牵连速度的正运动学映射
         void legFK_Cal(const Vector3d& _imu, const Vector3d& _gyro);// 包括由当前角度映射末端位姿，由当前角速度映射末端速度，由当前力矩映射当前末端力
         void setTargetLegPositon(Vector3d _lPosition);  // 更新腿部末端位置目标值
@@ -157,6 +165,7 @@ namespace Quadruped
         void legIK_Cal();                               // 包括由末端目标位姿映射关节目标角度，由末端目标速度映射到关节目标速度，由末端目标力映射到当前关节力矩
         void legIP_Cal();                               // 腿部连杆惯量动态位置计算(从初始位型到当前位型)
 
+        const JointS& getJointCurrent();                // 获取关节参数观测值
         const LegS& getLegCurrent();                    // 获取单腿模型参数观测值
 
         Eigen::Matrix3d aI2mI(const Vector<double, 6>& oriIa)
@@ -197,10 +206,12 @@ namespace Quadruped
     {
         currentJoint.Velocity = _jVel.block(0, 0, 3, 1);
         currentJoint.Foot_Velocity = _jVel(3);
-        /*currentJoint.Velocity(0) = enVelF[0].f(_jVel(0));
-        currentJoint.Velocity(1) = enVelF[1].f(_jVel(1));
-        currentJoint.Velocity(2) = enVelF[2].f(_jVel(2));*/
-        //currentJoint.Foot_Velocity = enVelF[3].f(_jVel(3));
+    }
+
+    void Leg::updateJointAcc(Vector4d _jAcc)
+    {
+        currentJoint.Acc = _jAcc.block(0, 0, 3, 1);
+        currentJoint.Foot_Acc = _jAcc(3);
     }
 
     void Leg::updateJointTau(Vector4d _jTorque)
@@ -217,9 +228,11 @@ namespace Quadruped
     void Leg::updateJointVel(Vector3d _jVel)
     {
         currentJoint.Velocity = _jVel;
-        /*currentJoint.Velocity(0) = enVelF[0].f(_jVel(0));
-        currentJoint.Velocity(1) = enVelF[1].f(_jVel(1));
-        currentJoint.Velocity(2) = enVelF[2].f(_jVel(2));*/
+    }
+
+    void Leg::updateJointAcc(Vector3d _jAcc)
+    {
+        currentJoint.Acc = _jAcc;
     }
 
     void Leg::updateJointTau(Vector3d _jTorque)
@@ -227,16 +240,17 @@ namespace Quadruped
         currentJoint.Torque = _jTorque;
     }
 
-    Matrix3d Leg::legJacobi_Cal(JointS& _joint)
+    void Leg::legJacobi_Cal()
     {
         // 雅可比矩阵计算
         Matrix3d J = Matrix3d::Zero();
-        double s1 = sin(_joint.Angle(0));
-        double c1 = cos(_joint.Angle(0));
-        double s2 = sin(_joint.Angle(1));
-        double c2 = cos(_joint.Angle(1));
-        double s23 = sin(_joint.Angle(1) + _joint.Angle(2));
-        double c23 = cos(_joint.Angle(1) + _joint.Angle(2));
+        Matrix3d J_dot = Matrix3d::Zero();
+        double s1 = sin(currentJoint.Angle(0));
+        double c1 = cos(currentJoint.Angle(0));
+        double s2 = sin(currentJoint.Angle(1));
+        double c2 = cos(currentJoint.Angle(1));
+        double s23 = sin(currentJoint.Angle(1) + currentJoint.Angle(2));
+        double c23 = cos(currentJoint.Angle(1) + currentJoint.Angle(2));
         J(0, 0) = 0;
         J(0, 1) = -L2 * c2 - L3 * c23;
         J(0, 2) = -L3 * c23;
@@ -246,7 +260,23 @@ namespace Quadruped
         J(2, 0) = L1 * c1 + L2 * s1 * c2 + L3 * s1 * c23 + L2b * c1 + L3b * c1 + L4 * s1;
         J(2, 1) = L2 * c1 * s2 + L3 * c1 * s23;
         J(2, 2) = L3 * c1 * s23;
-        return J;
+        this->jacobi = J;
+        double s1_dot = c1 * currentJoint.Velocity(0);
+        double c1_dot = -s1 * currentJoint.Velocity(0);
+        double s2_dot = c2 * currentJoint.Velocity(1);
+        double c2_dot = -s2 * currentJoint.Velocity(1);
+        double s23_dot = c23 * (currentJoint.Velocity(1) + currentJoint.Velocity(2));
+        double c23_dot = -s23 * (currentJoint.Velocity(1) + currentJoint.Velocity(2));
+        J_dot(0, 0) = 0;
+        J_dot(0, 1) = -L2 * c2_dot - L3 * c23_dot;
+        J_dot(0, 2) = -L3 * c23_dot;
+        J_dot(1, 0) = -L1 * s1_dot + L2 * c1_dot * c2_dot + L3 * c1_dot * c23_dot - L2b * s1_dot - L3b * s1_dot + L4 * c1_dot;
+        J_dot(1, 1) = -L2 * s1_dot * s2_dot - L3 * s1_dot * s23_dot;
+        J_dot(1, 2) = -L3 * s1_dot * s23_dot;
+        J_dot(2, 0) = L1 * c1_dot + L2 * s1_dot * c2_dot + L3 * s1_dot * c23_dot + L2b * c1_dot + L3b * c1_dot + L4 * s1_dot;
+        J_dot(2, 1) = L2 * c1_dot * s2_dot + L3 * c1_dot * s23_dot;
+        J_dot(2, 2) = L3 * c1_dot * s23_dot;
+        this->jacobi_dot = J_dot;
     }
 
     void Leg::legFK_Cal()
@@ -259,6 +289,8 @@ namespace Quadruped
         currentLeg.Velocity = jacobi * currentJoint.Velocity;
         // 雅可比矩阵完成从当前关节力矩到当前末端虚拟力的映射
         currentLeg.Force = jacobi.transpose().inverse() * currentJoint.Torque;
+        // 得到仅由关节贡献的腿部末端加速度
+        currentLeg.Acc = jacobi_dot * currentJoint.Velocity + jacobi * currentJoint.Acc;
     }
 
     void Leg::legFK_Cal(const Vector3d& _imu, const Vector3d& _gyro)
@@ -279,6 +311,8 @@ namespace Quadruped
         currentLeg.VelocityG = currentLeg.Velocity + currentLeg.VelocityW;
         // 雅可比矩阵完成从当前关节力矩到当前末端虚拟力的映射
         currentLeg.Force = jacobi.transpose().inverse() * currentJoint.Torque;
+        // 得到仅由关节贡献的腿部末端加速度
+        currentLeg.Acc = jacobi_dot * currentJoint.Velocity + jacobi * currentJoint.Acc;
     }
 
     void Leg::setTargetLegPositon(Vector3d _lPosition)
@@ -351,6 +385,11 @@ namespace Quadruped
         this->Icleg[1] = mI2aI((rhip * rthigh).toRotationMatrix() * aI2mI(Ic[1]) * (rhip * rthigh).toRotationMatrix().transpose());
         this->Icleg[2] = mI2aI((rhip * rthigh * rcalf).toRotationMatrix() * aI2mI(Ic[2]) * (rhip * rthigh * rcalf).toRotationMatrix().transpose());
         this->Icleg[3] = mI2aI((rhip * rthigh * rcalf).toRotationMatrix() * aI2mI(Ic[3]) * (rhip * rthigh * rcalf).toRotationMatrix().transpose());
+    }
+
+    const JointS& Leg::getJointCurrent()
+    {
+        return currentJoint;
     }
 
     const LegS& Leg::getLegCurrent()

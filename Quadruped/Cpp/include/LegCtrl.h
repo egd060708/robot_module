@@ -23,9 +23,11 @@ namespace Quadruped
         // 更新电机观测值
         void updateMotorAng(Vector4d _a);
         void updateMotorVel(Vector4d _w);
+        void updateMotorAcc(Vector4d _a);
         void updateMotorTau(Vector4d _t);
         void updateMotorAng(Vector3d _a);
         void updateMotorVel(Vector3d _w);
+        void updateMotorAcc(Vector3d _a);
         void updateMotorTau(Vector3d _t);
         // 更新末端目标值
         void setEndPositionTar(Vector3d _p);
@@ -105,6 +107,11 @@ namespace Quadruped
         legObject->updateJointVel(_w);
     }
 
+    void LegCtrl::updateMotorAcc(Vector4d _a)
+    {
+        legObject->updateJointAcc(_a);
+    }
+
     void LegCtrl::updateMotorTau(Vector4d _t)
     {
         legObject->updateJointTau(_t);
@@ -118,6 +125,11 @@ namespace Quadruped
     void LegCtrl::updateMotorVel(Vector3d _w)
     {
         legObject->updateJointVel(_w);
+    }
+
+    void LegCtrl::updateMotorAcc(Vector3d _a)
+    {
+        legObject->updateJointAcc(_a);
     }
 
     void LegCtrl::updateMotorTau(Vector3d _t)
@@ -147,7 +159,7 @@ namespace Quadruped
 
     void LegCtrl::legStateCal(const Vector3d& _imu, const Vector3d& _gyro)
     {
-        legObject->jacobi = legObject->legJacobi_Cal(legObject->currentJoint);
+        legObject->legJacobi_Cal();
         legObject->legFK_Cal(_imu,_gyro);
         legObject->legIP_Cal();
         legObject->legIK_Cal();

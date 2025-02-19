@@ -52,7 +52,7 @@ namespace Quadruped
 		//std::cout << "Force:" << legObj->targetLeg.Force << std::endl;
 		// 雅可比矩阵转换为输出力矩
 		//std::cout << "TarJoint:" << legObj->targetJoint.Angle << std::endl;
-		legObj->jacobi = legObj->legJacobi_Cal(legObj->currentJoint);
+		legObj->legJacobi_Cal();
 		//std::cout << "Jacobi:" << legObj->jacobi << std::endl;
 		legObj->targetJoint.Torque = legObj->jacobi.inverse() * legObj->targetLeg.Force;
 		//std::cout << "Torque:" << legObj->targetJoint.Torque << "\n\n" << std::endl;
