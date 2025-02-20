@@ -954,16 +954,20 @@ namespace Quadruped
 
         // 为了减少计算量，轮速规划是基于车体坐标系的，因此要对世界坐标系的力做映射
         Eigen::Matrix<double, 4, 3> s = Eigen::Matrix<double, 4, 3>::Zero();
-        s(0, 0) = -fftauRatio[0];
+        //s(0, 0) = -fftauRatio[0];
+        s(0, 0) = -1;
         dynamicLeft.block(6, 0, 4, 3) = s * bodyObject->Rsbh_c.transpose();
         s(0, 0) = 0;
-        s(1, 0) = -fftauRatio[1];
+        /*s(1, 0) = -fftauRatio[1];*/
+        s(1, 0) = -1;
         dynamicLeft.block(6, 3, 4, 3) = s * bodyObject->Rsbh_c.transpose();
         s(1, 0) = 0;
-        s(2, 0) = -fftauRatio[2];
+        //s(2, 0) = -fftauRatio[2];
+        s(2, 0) = -1;
         dynamicLeft.block(6, 6, 4, 3) = s * bodyObject->Rsbh_c.transpose();
         s(2, 0) = 0;
-        s(3, 0) = -fftauRatio[3];
+        /*s(3, 0) = -fftauRatio[3];*/
+        s(3, 0) = -1;
         dynamicLeft.block(6, 9, 4, 3) = s * bodyObject->Rsbh_c.transpose();
     }
 
@@ -1000,7 +1004,7 @@ namespace Quadruped
         currentBalanceState.r_dot = bodyObject->currentWorldState.angVel_xyz;
         for (int i = 0; i < 4; i++)
         {
-            currentBalanceState.pe(i) = (bodyObject->Rsb_c * bodyObject->Rsbh_c.transpose() * bodyObject->currentBodyState.leg_b[i].Position)(0);
+            currentBalanceState.pe(i) = (bodyObject->Rsbh_c.transpose() * bodyObject->Rsb_c * bodyObject->currentBodyState.leg_b[i].Position)(0);
             currentBalanceState.pe_dot(i) = (bodyObject->Rsbh_c.transpose() * bodyObject->currentWorldState.leg_s[i].VelocityW)(0);
         }
         //std::cout << "cbpe: \n" << currentBalanceState.pe_dot << std::endl;
@@ -1129,6 +1133,9 @@ namespace Quadruped
                 this->Q(6 + i, 6 + i) = _oriQ(6 + i) * (1e-10 + bodyObject->est->_ctTrust[i]);
                 this->Q(16 + i, 16 + i) = _oriQ(16 + i) * (1 + 1e1 * (1 - bodyObject->est->_ctTrust[i]));
                 this->fftauRatio[i] = _ffRatio * bodyObject->est->_ctTrust[i];
+                /*this->Q(6 + i, 6 + i) = _oriQ(6 + i) * (1e-10 + bodyObject->mixContact(i));
+                this->Q(16 + i, 16 + i) = _oriQ(16 + i) * (1 + 1e1 * (1 - bodyObject->mixContact(i)));*/
+                //this->fftauRatio[i] = _ffRatio * bodyObject->mixContact(i);
             }
         }
         else

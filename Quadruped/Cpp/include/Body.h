@@ -21,7 +21,7 @@ namespace Quadruped
     typedef struct _worldFrame
     {
         LegS leg_s[4];
-        Vector4i contactEst = Vector4i::Zero(); // 接触预测
+        Vector4i contactEst = Vector4i::Ones(); // 接触预测
         Vector3d dist = Vector3d::Zero();       // 机身在世界坐标系下的位移
         Vector3d angVel_xyz = Vector3d::Zero(); // 角速度
         Vector3d linVel_xyz = Vector3d::Zero(); // 线速度
@@ -71,6 +71,8 @@ namespace Quadruped
 
         Eigen::Matrix<double,3,4> initLegsXYPosition; // 指定右后腿初始（平面）位置
 
+        Vector4i mixContact = Vector4i::Ones();
+
         // 将向量转换成角对称矩阵
         Matrix3d v3_to_m3(Vector3d _v);
 
@@ -96,7 +98,7 @@ namespace Quadruped
         /* 更新整机等效重心和惯量参数 */
         void updateEqBody();
         /* 接触预测 */
-        void estimateContact(const Vector4i& _contact_t);
+        void estimateContact(const Vector4i& _contact_t, const double& _t);
 
         /* 更新目标位姿 */
         void updateBodyTargetPos(Vector3d _angle, Vector3d _position);
@@ -292,6 +294,10 @@ namespace Quadruped
 
     void Body::legAccInWorldFrame()
     {
+        /*static LPF_SecondOrder_Classdef legAccF[4][3] = { {LPF_SecondOrder_Classdef(CUTOFFHZ,500),LPF_SecondOrder_Classdef(CUTOFFHZ,500),LPF_SecondOrder_Classdef(CUTOFFHZ,500)},\
+                                                            {LPF_SecondOrder_Classdef(CUTOFFHZ, 500), LPF_SecondOrder_Classdef(CUTOFFHZ, 500), LPF_SecondOrder_Classdef(CUTOFFHZ, 500)},\
+                                                            {LPF_SecondOrder_Classdef(CUTOFFHZ, 500), LPF_SecondOrder_Classdef(CUTOFFHZ, 500), LPF_SecondOrder_Classdef(CUTOFFHZ, 500)},\
+                                                            {LPF_SecondOrder_Classdef(CUTOFFHZ, 500), LPF_SecondOrder_Classdef(CUTOFFHZ, 500), LPF_SecondOrder_Classdef(CUTOFFHZ, 500)} };*/
         // 将机身旋转角速度向量转换成反对称矩阵
         Matrix3d w = v3_to_m3(currentBodyState.angVel_xyz);
         Matrix3d w_dot = v3_to_m3(currentBodyState.angAcc_xyz);
@@ -300,7 +306,11 @@ namespace Quadruped
             // 更新足端相对于机身坐标系的加速度
             currentBodyState.leg_b[i].Acc = legs[i]->currentLeg.Acc;
             // 更新足端相对于世界坐标系的加速度
-            currentWorldState.leg_s[i].Acc = currentWorldState.linAcc_xyz + Rsb_c * (w_dot * currentBodyState.leg_b[i].Position + w * w * currentBodyState.leg_b[i].Position + legs[i]->currentLeg.Acc);
+            Vector3d Acc = currentWorldState.linAcc_xyz + Rsb_c * (w_dot * currentBodyState.leg_b[i].Position + w * w * currentBodyState.leg_b[i].Position + legs[i]->currentLeg.Acc);
+            currentWorldState.leg_s[i].Acc = Acc;
+            /*currentWorldState.leg_s[i].Acc(0) = legAccF[i][0].f(Acc(0));
+            currentWorldState.leg_s[i].Acc(1) = legAccF[i][1].f(Acc(1));
+            currentWorldState.leg_s[i].Acc(2) = legAccF[i][2].f(Acc(2));*/
         }
     }
 
@@ -355,20 +365,66 @@ namespace Quadruped
 
     }
 
-    void Body::estimateContact(const Vector4i& _contact_t)
+    void Body::estimateContact(const Vector4i& _contact_t, const double& _t)
     {
         static LPF_SecondOrder_Classdef extForceF[4][3] = { {LPF_SecondOrder_Classdef(CUTOFFHZ,500),LPF_SecondOrder_Classdef(CUTOFFHZ,500),LPF_SecondOrder_Classdef(CUTOFFHZ,500)},\
                                                             {LPF_SecondOrder_Classdef(CUTOFFHZ, 500), LPF_SecondOrder_Classdef(CUTOFFHZ, 500), LPF_SecondOrder_Classdef(CUTOFFHZ, 500)},\
                                                             {LPF_SecondOrder_Classdef(CUTOFFHZ, 500), LPF_SecondOrder_Classdef(CUTOFFHZ, 500), LPF_SecondOrder_Classdef(CUTOFFHZ, 500)},\
                                                             {LPF_SecondOrder_Classdef(CUTOFFHZ, 500), LPF_SecondOrder_Classdef(CUTOFFHZ, 500), LPF_SecondOrder_Classdef(CUTOFFHZ, 500)} };
+        static int vacantCheck[4] = { 1,1,1,1 };
+        static double last_t[4] = { 0 };
+        static Vector4i lastContact_c = Vector4i::Ones();
+        static Vector4i lastContact_t = Vector4i::Ones();
+
         this->targetWorldState.contactEst = _contact_t;
         for (int i = 0; i < 4; i++)
         {
-            Vector3d extForce = this->legs[i]->Mc[3] * (this->currentWorldState.leg_s[i].Acc/* - Vector3d(0, 0, -9.81)*/)/* - this->currentWorldState.leg_s[i].Force*/;
+            Vector3d extForce = this->legs[i]->Mc[3] * (this->currentWorldState.leg_s[i].Acc/* - Vector3d(0, 0, -9.81)*/) - this->currentWorldState.leg_s[i].Force;
+            //this->currentWorldState.leg_s[i].extForce = extForce;
             this->currentWorldState.leg_s[i].extForce(0) = extForceF[i][0].f(extForce(0));
             this->currentWorldState.leg_s[i].extForce(1) = extForceF[i][1].f(extForce(1));
             this->currentWorldState.leg_s[i].extForce(2) = extForceF[i][2].f(extForce(2));
+            if (vacantCheck[i] == 1 && this->currentWorldState.leg_s[i].extForce(2) < 100.)
+            {
+                this->currentWorldState.contactEst(i) = 0;
+                vacantCheck[i] = 0;
+            }
+            if (this->currentWorldState.leg_s[i].Acc(2) > 225.)
+            {
+                this->currentWorldState.contactEst(i) = 1;
+                last_t[i] = _t;// 记录接触的时刻
+            }
+            /*if (this->currentWorldState.contactEst(i) == 0 && this->currentWorldState.leg_s[i].extForce(2) > 125.)
+            {
+                this->currentWorldState.contactEst(i) = 1;
+            }*/
+            if (vacantCheck[i] == 0 && this->currentWorldState.contactEst(i) == 1 && (_t - last_t[i]) > 0.1)
+            {
+                vacantCheck[i] = 1;
+            }
+
+            // 混合接触相位，上升沿参考被动检测，下降沿参考步态周期规划
+            if (mixContact(i) == 0)
+            {
+                if (this->currentWorldState.contactEst(i) == 1 && lastContact_c(i) == 0)
+                {
+                    mixContact(i) = 1;
+                }
+                if (this->targetWorldState.contactEst(i) == 1)
+                {
+                    mixContact(i) = 1;
+                }
+            }
+            else
+            {
+                if (this->targetWorldState.contactEst(i) == 0 && lastContact_t(i) == 1)
+                {
+                    mixContact(i) = 0;
+                }
+            }
         }
+        lastContact_c = this->currentWorldState.contactEst;
+        lastContact_t = this->targetWorldState.contactEst;
     }
 
     void Body::updateBodyTargetPos(Vector3d _angle, Vector3d _position)
@@ -476,7 +532,22 @@ namespace Quadruped
     }
 
     Eigen::Vector3d Body::rotMatToRPY(const Matrix3d& R) {
-        Vector3d rpy;
+        Vector3d rpy;// 顺序为ZYX
+        //constexpr double PI = 3.14159265358979323846;
+        //constexpr double EPSILON = 1e-6;
+        //// 检查万向节锁（俯仰角为±90度）
+        //if (std::abs(R(2,0)) > 1.0 - EPSILON) {
+        //    rpy(1) = (R(2,0) > 0) ? PI / 2 : -PI / 2;
+        //    rpy(0) = 0.0; // 固定横滚角为0
+
+        //    // 计算偏航角（通过矩阵不同元素组合）
+        //    rpy(2) = std::atan2((R(2,0) > 0) ? R(1,2) : -R(1,2),R(1,1));
+        //}
+        //else {
+        //    rpy(0) = std::atan2(R(1, 0), R(0, 0));
+        //    rpy(1) = std::asin(-R(2, 0));
+        //    rpy(2) = std::atan2(R(2, 1), R(2, 2));
+        //}
         rpy(0) = atan2(R(2, 1), R(2, 2));
         rpy(1) = asin(-R(2, 0));
         rpy(2) = atan2(R(1, 0), R(0, 0));
