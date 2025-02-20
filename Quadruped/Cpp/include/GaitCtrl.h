@@ -25,8 +25,8 @@ namespace Quadruped
 		void initExpectK(Eigen::Vector3d _k);// 初始化期望运动控制参数
 		void _updateFootPoints();// 更新中性立足点
 		void initSwingParams(double _period, double _stancePhaseRatio, Eigen::Vector4d _bias, double _t);// 初始化摆动相关参数
-		void calcWave(Eigen::Vector4d& phase, Eigen::Vector4i& contact, WaveStatus status, double _t);
-		void calcContactPhase(WaveStatus status, double _t);
+		void calcWave(Eigen::Vector4d& phase, Eigen::Vector4i& contact, WaveStatus status, double _t, Eigen::Vector4d& _estPhase, Eigen::Vector4i& _estContact);
+		void calcContactPhase(WaveStatus status, double _t, Eigen::Vector4d& _estPhase, Eigen::Vector4i& _estContact);
 		
 		void setGait(Eigen::Vector2d vxyTargetGlobal, double dYawTarget, double gaitHeight);
 		void run(Eigen::Matrix<double, 3, 4>& _feetPos, Eigen::Matrix<double, 3, 4>& _feetVel, double _maxStepL);
@@ -53,6 +53,7 @@ namespace Quadruped
 		// 接触状态与摆动状态检测
 		double period;// 步态周期p
 		double stRatio;// 触地系数r(归一化)
+		Eigen::Vector4d estStRatio;// 用于被动预测的触地系数
 		Eigen::Vector4d bias = Eigen::Vector4d::Zero();// 步态偏移系数，单腿偏移时间与步态周期的比值(归一化)
 		Eigen::Vector4d normalT = Eigen::Vector4d::Zero();// 归一化的时间
 		Eigen::Vector4d phase = Eigen::Vector4d::Zero();
@@ -134,6 +135,7 @@ namespace Quadruped
 	{
 		period = _period;
 		stRatio = _stancePhaseRatio;
+		estStRatio.setConstant(_stancePhaseRatio);
 		bias = _bias;
 		startT = _t;
 		contactPast.setZero();
@@ -215,8 +217,9 @@ namespace Quadruped
 		return footPos;
 	}
 
-	void GaitCtrl::calcWave(Eigen::Vector4d& phase, Eigen::Vector4i& contact, WaveStatus status, double _t)
+	void GaitCtrl::calcWave(Eigen::Vector4d& phase, Eigen::Vector4i& contact, WaveStatus status, double _t, Eigen::Vector4d& _estPhase, Eigen::Vector4i& _estContact)
 	{
+		static Vector4i lastEstContact = Vector4i::Ones();
 		if (status == WaveStatus::WAVE_ALL)
 		{
 			passT = _t - startT;
@@ -225,17 +228,31 @@ namespace Quadruped
 				// 得到总的步态周期相位
 				normalT(i) = fmod(passT + period - period * bias(i), period) / period;// 取余操作并归一化
 				// 根据归一化的T判断应该是接触地面还是摆动
-				if (normalT(i) < stRatio)
+				if (normalT(i) < (1 - stRatio))
 				{
 					// 计算触地过程中的相位变化0-1
-					contact(i) = 1;
-					phase(i) = normalT(i) / stRatio;
+					contact(i) = 0;
+					phase(i) = normalT(i) / (1 - stRatio);
 				}
 				else
 				{
 					// 计算非触地过程中的相位变化0-1
-					contact(i) = 0;
-					phase(i) = (normalT(i) - stRatio) / (1 - stRatio);
+					contact(i) = 1;
+					phase(i) = (normalT(i) + stRatio - 1) / stRatio;
+				}
+				// 根据被动接触检测建立相位周期
+				if (_estContact(i) == 1 && lastEstContact(i) == 0)
+				{
+					estStRatio(i) = 1 - normalT(i);
+				}
+				if (normalT(i) > (1 - estStRatio(i)))
+				{
+					_estPhase(i) = (normalT(i) + estStRatio(i) - 1) / estStRatio(i);
+				}
+				else
+				{
+					//_estPhase(i) = normalT(i) / (1 - estStRatio(i));
+					_estPhase(i) = 0;
 				}
 			}
 		}
@@ -243,18 +260,23 @@ namespace Quadruped
 		{
 			contact.setZero();
 			phase.setConstant(0.5);
+			_estContact.setZero();
+			_estPhase.setConstant(0.5);
 		}
 		else if (status == WaveStatus::STANCE_ALL)
 		{
 			contact.setOnes();
 			phase.setConstant(0.5);
+			_estContact.setOnes();
+			_estPhase.setConstant(0.5);
 		}
+		lastEstContact = _estContact;
 	}
 
-	void GaitCtrl::calcContactPhase(WaveStatus status, double _t)
+	void GaitCtrl::calcContactPhase(WaveStatus status, double _t, Eigen::Vector4d& _estPhase, Eigen::Vector4i& _estContact)
 	{
 
-		calcWave(phase, contact, status, _t);
+		calcWave(phase, contact, status, _t, _estPhase, _estContact);
 
 		if (status != statusPast)
 		{
@@ -262,7 +284,7 @@ namespace Quadruped
 			{
 				switchStatus.setOnes();
 			}
-			calcWave(phasePast, contactPast, statusPast, _t);
+			calcWave(phasePast, contactPast, statusPast, _t, _estPhase, _estContact);
 			// 两种情况，分别是从完全站立到全摆动，以及全摆动到完全站立
 			if ((status == WaveStatus::STANCE_ALL) && (statusPast == WaveStatus::SWING_ALL))
 			{
