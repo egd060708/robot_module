@@ -1027,7 +1027,7 @@ namespace Quadruped
     void QpwPVCtrl::mpc_adjust(const VectorX<bool>& _enList)
     {
         A.block(0, 10, 3, 3) = Eigen::Matrix3d::Identity();
-        A.block(3, 13, 3, 3) = bodyObject->Rsb_c.transpose();
+        A.block(3, 13, 3, 3) = bodyObject->dEuler2W.inverse() * bodyObject->Rsb_c.transpose();
         A.block(6, 16, 4, 4) = Eigen::Matrix4d::Identity();
         A.block(10, 20, 3, 3) = Eigen::Matrix3d::Identity();
         B.block(10,0,10,16) = dynamicRight.inverse() * dynamicLeft;
@@ -1047,14 +1047,6 @@ namespace Quadruped
         x.block<3, 1>(13, 0) = currentBalanceState.r_dot;
         x.block<4, 1>(16, 0) = currentBalanceState.pe_dot;
         x.block<3, 1>(20, 0) = g;
-        /*std::cout << "targetP: " << targetBalanceState.p << std::endl;
-        std::cout << "currenP: " << currentBalanceState.p << std::endl;
-        std::cout << "targetPdot: " << targetBalanceState.p_dot << std::endl;
-        std::cout << "currenPdot: " << currentBalanceState.p_dot << std::endl;*/
-        /*std::cout << "targetR: " << targetBalanceState.r << std::endl;
-        std::cout << "currenR: " << currentBalanceState.r << std::endl;
-        std::cout << "targetRdot: " << targetBalanceState.r_dot << std::endl;
-        std::cout << "currenRdot: " << currentBalanceState.r_dot << std::endl;*/
         balanceController.mpc_update(y, x, 100, 0.02);
         balanceController.mpc_init(A, B, Q, F, R, W, dt);
         balanceController.mpc_solve();
@@ -1062,7 +1054,6 @@ namespace Quadruped
         {
             this->mpcOut.block(0, i, 3, 1) = -bodyObject->Rsb_c.transpose() * balanceController.getOutput().block<3, 1>(3 * i, 0);
             this->mpcOut(3, i) = balanceController.getOutput()(12 + i, 0);
-            //std::cout << "wheelPID: \n" << wheelPID[i].target << wheelPID[i].current << wheelPID[i].out << std::endl;
         }
     }
 

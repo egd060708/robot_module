@@ -56,6 +56,7 @@ namespace Quadruped
         Matrix4d Tsb_c = Matrix4d::Identity(); // (当前)世界坐标系到机身坐标系的齐次变换映射
         Matrix3d Rsb_t = Matrix3d::Identity(); // (目标)世界坐标系到机身坐标系的旋转矩阵映射
         Matrix4d Tsb_t = Matrix4d::Identity(); // (目标)世界坐标系到机身坐标系的齐次变换映射
+        Matrix3d dEuler2W = Matrix3d::Identity(); // 轴角速度转到欧拉角角速度
 
         double Mb[3] = {};      // 机器人机体质量(包括头部，中段和尾部)
         Vector<double, 6> Ib[3] = {};    // 机器人单刚体动力学机身转动惯量
@@ -123,9 +124,10 @@ namespace Quadruped
 
         /* 一些数学计算函数 */
         Eigen::Matrix3d quatToRot(const Vector4d& _quat);
-        Eigen::Vector3d rotMatToRPY(const Matrix3d& R);
+        Eigen::Vector3d rotMatToEulerZYX(const Matrix3d& R);
         Eigen::Vector<double, 6> parallelAxis(const Vector3d& dstAxis, const Vector3d& oriAxis, const Vector<double, 6>& oriIm, const double oriM);// 平行轴定理
         Eigen::Matrix3d aI2mI(const Vector<double, 6>& oriIm);
+        Eigen::Matrix3d eulerVelToRotVel(const Vector3d& _euler);
     };
 
     Body::Body(EstBase* _est,Leg* _legObj[4], double _dt)
@@ -182,32 +184,17 @@ namespace Quadruped
     {
         if (direction == 1)
         {
-            // 当前
-            // 三轴欧拉角旋转矩阵
-            //Eigen::AngleAxisd rotationx_c(currentBodyState.Ang_xyz(0), Eigen::Vector3d::UnitX());
-            //Eigen::AngleAxisd rotationy_c(currentBodyState.Ang_xyz(1), Eigen::Vector3d::UnitY());
-            //Eigen::AngleAxisd rotationz_c(currentBodyState.Ang_xyz(2), Eigen::Vector3d::UnitZ());
-            //Eigen::Matrix3d rotation_c = (rotationx_c * rotationy_c * rotationz_c).toRotationMatrix();
-            //// 构建齐次变换矩阵
-            //Rsb_c = rotation_c;
-            //Tsb_c.block<3, 3>(0, 0) = rotation_c;
-            //Tsb_c.block<3, 1>(0, 3) = currentWorldState.dist;
             // 使用四元数得到变换矩阵
             Eigen::Matrix3d rotation_c = quatToRot(currentBodyState.Quat);
-            //Rsb_c = rotation_c * _extR.transpose();
             Rsb_c = rotation_c;
-            /*std::cout << "ori: \n" << rotation_c << std::endl;
-            std::cout << "ext: \n" << _extR << std::endl;
-            std::cout << "all: \n" << Rsb_c << std::endl;*/
-            currentBodyState.Ang_xyz = rotMatToRPY(Rsb_c);
+            currentBodyState.Ang_xyz = rotMatToEulerZYX(Rsb_c);
             Eigen::AngleAxisd rotationz_c(currentBodyState.Ang_xyz(2), Eigen::Vector3d::UnitZ());
             Rsbh_c = rotationz_c.toRotationMatrix();
             Tsb_c.block<3, 3>(0, 0) = Rsb_c;
             Tsb_c.block<3, 1>(0, 3) = currentWorldState.dist;
+            this->dEuler2W = this->eulerVelToRotVel(currentBodyState.Ang_xyz);
             // 更新其他世界坐标系下的变量
             currentWorldState.angVel_xyz = Rsb_c * currentBodyState.angVel_xyz;
-            //currentWorldState.linVel_xyz = rotation_c * currentBodyState.linVel_xyz;
-            // currentWorldState.angAcc_xyz = rotation_c * currentBodyState.angAcc_xyz;
             currentWorldState.linAcc_xyz = Rsb_c * currentBodyState.linAcc_xyz;
             est->updateTsb(Tsb_c);
         }
@@ -218,7 +205,7 @@ namespace Quadruped
             Eigen::AngleAxisd rotationx_t(targetBodyState.Ang_xyz(0), Eigen::Vector3d::UnitX());
             Eigen::AngleAxisd rotationy_t(targetBodyState.Ang_xyz(1), Eigen::Vector3d::UnitY());
             Eigen::AngleAxisd rotationz_t(targetBodyState.Ang_xyz(2), Eigen::Vector3d::UnitZ());
-            Eigen::Matrix3d rotation_t = (rotationx_t * rotationy_t * rotationz_t).toRotationMatrix();
+            Eigen::Matrix3d rotation_t = (rotationz_t * rotationy_t * rotationx_t).toRotationMatrix();
             // 构建齐次变换矩阵
             Rsb_t = rotation_t;
             Tsb_t.block<3, 3>(0, 0) = rotation_t;
@@ -394,10 +381,10 @@ namespace Quadruped
                 this->currentWorldState.contactEst(i) = 1;
                 last_t[i] = _t;// 记录接触的时刻
             }
-            /*if (this->currentWorldState.contactEst(i) == 0 && this->currentWorldState.leg_s[i].extForce(2) > 125.)
+            if (this->currentWorldState.contactEst(i) == 0 && this->currentWorldState.leg_s[i].extForce(2) > 125.)
             {
                 this->currentWorldState.contactEst(i) = 1;
-            }*/
+            }
             if (vacantCheck[i] == 0 && this->currentWorldState.contactEst(i) == 1 && (_t - last_t[i]) > 0.1)
             {
                 vacantCheck[i] = 1;
@@ -531,26 +518,23 @@ namespace Quadruped
         return R;
     }
 
-    Eigen::Vector3d Body::rotMatToRPY(const Matrix3d& R) {
+    Eigen::Vector3d Body::rotMatToEulerZYX(const Matrix3d& R) {
         Vector3d rpy;// 顺序为ZYX
-        //constexpr double PI = 3.14159265358979323846;
-        //constexpr double EPSILON = 1e-6;
-        //// 检查万向节锁（俯仰角为±90度）
-        //if (std::abs(R(2,0)) > 1.0 - EPSILON) {
-        //    rpy(1) = (R(2,0) > 0) ? PI / 2 : -PI / 2;
-        //    rpy(0) = 0.0; // 固定横滚角为0
+        constexpr double PI = 3.14159265358979323846;
+        constexpr double EPSILON = 1e-6;
+        // 检查万向节锁（俯仰角为±90度）
+        if (std::abs(R(2,0)) > 1.0 - EPSILON) {
+            rpy(1) = (R(2,0) > 0) ? PI / 2 : -PI / 2;
+            rpy(0) = 0.0; // 固定横滚角为0
 
-        //    // 计算偏航角（通过矩阵不同元素组合）
-        //    rpy(2) = std::atan2((R(2,0) > 0) ? R(1,2) : -R(1,2),R(1,1));
-        //}
-        //else {
-        //    rpy(0) = std::atan2(R(1, 0), R(0, 0));
-        //    rpy(1) = std::asin(-R(2, 0));
-        //    rpy(2) = std::atan2(R(2, 1), R(2, 2));
-        //}
-        rpy(0) = atan2(R(2, 1), R(2, 2));
-        rpy(1) = asin(-R(2, 0));
-        rpy(2) = atan2(R(1, 0), R(0, 0));
+            // 计算偏航角（通过矩阵不同元素组合）
+            rpy(2) = std::atan2((R(2,0) > 0) ? R(1,2) : -R(1,2),R(1,1));
+        }
+        else {
+            rpy(2) = std::atan2(R(1, 0), R(0, 0));
+            rpy(1) = std::asin(-R(2, 0));
+            rpy(0) = std::atan2(R(2, 1), R(2, 2));
+        }
         return rpy;
     }
 
@@ -580,5 +564,17 @@ namespace Quadruped
         mI(1, 2) = oriIa(5);
         mI(2, 1) = oriIa(5);
         return mI;
+    }
+
+    Eigen::Matrix3d Body::eulerVelToRotVel(const Vector3d& _euler)
+    {
+        Matrix3d t = Matrix3d::Zero();
+        t(0, 0) = 1;
+        t(0, 2) = -std::sin(_euler(1));
+        t(1, 1) = std::cos(_euler(0));
+        t(1, 2) = std::cos(_euler(1)) * std::sin(_euler(0));
+        t(2, 1) = -std::sin(_euler(0));
+        t(2, 2) = std::cos(_euler(1)) * std::cos(_euler(0));
+        return t;
     }
 }
