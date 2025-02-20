@@ -950,7 +950,7 @@ namespace Quadruped
             dynamicLeft(6 + i, 12 + i) = 1. / bodyObject->legs[i]->Reff;
         }
         dynamicRight.block<3, 3>(0, 0) = bodyObject->M;
-        dynamicRight.block<3, 3>(3, 3) = bodyObject->Rsb_c * bodyObject->I * bodyObject->Rsb_c.transpose();
+        dynamicRight.block<3, 3>(3, 3) = bodyObject->Rsb_c * bodyObject->I * bodyObject->Rsb_c.transpose() * bodyObject->dEuler2W;
 
         // 为了减少计算量，轮速规划是基于车体坐标系的，因此要对世界坐标系的力做映射
         Eigen::Matrix<double, 4, 3> s = Eigen::Matrix<double, 4, 3>::Zero();
@@ -1001,7 +1001,7 @@ namespace Quadruped
         currentBalanceState.r(0) = bodyObject->currentBodyState.Ang_xyz(0);
         currentBalanceState.r(1) = bodyObject->currentBodyState.Ang_xyz(1);
         currentBalanceState.r(2) = angC.f(bodyObject->currentBodyState.Ang_xyz(2));
-        currentBalanceState.r_dot = bodyObject->currentWorldState.angVel_xyz;
+        currentBalanceState.r_dot = bodyObject->Rsb_c * bodyObject->dEuler2W.inverse() * bodyObject->currentBodyState.angVel_xyz;
         for (int i = 0; i < 4; i++)
         {
             currentBalanceState.pe(i) = (bodyObject->Rsbh_c.transpose() * bodyObject->Rsb_c * bodyObject->currentBodyState.leg_b[i].Position)(0);
@@ -1027,7 +1027,7 @@ namespace Quadruped
     void QpwPVCtrl::mpc_adjust(const VectorX<bool>& _enList)
     {
         A.block(0, 10, 3, 3) = Eigen::Matrix3d::Identity();
-        A.block(3, 13, 3, 3) = bodyObject->dEuler2W.inverse() * bodyObject->Rsb_c.transpose();
+        A.block(3, 13, 3, 3) = bodyObject->Rsb_c.transpose();
         A.block(6, 16, 4, 4) = Eigen::Matrix4d::Identity();
         A.block(10, 20, 3, 3) = Eigen::Matrix3d::Identity();
         B.block(10,0,10,16) = dynamicRight.inverse() * dynamicLeft;
