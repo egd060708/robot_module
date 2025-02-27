@@ -247,7 +247,7 @@ namespace Quadruped {
 			y.block(0, 0, 3, 1) = this->Pbt;
 			y.block(3, 0, 3, 1) = this->Vbt;
 			this->traBodyGenerator.mpc_update(y, x, 100, 1.);
-			this->traBodyGenerator.mpc_solve();
+			this->traBodyGenerator.mpc_solve(1);
 			this->bodyAcc = this->traBodyGenerator.getOutput();
 			this->Vbr = this->Vbr + 0.002 * this->Rsbh_c * this->bodyAcc;
 			this->Pbr = this->Pbr + 0.5 * 0.002 * (last_Vbr + this->Vbr);
@@ -305,7 +305,7 @@ namespace Quadruped {
 			y.block(6, 0, 2, 1) = this->Plt.col(3).segment(0, 2);
 			y.block(8, 0, 8, 1).setZero();
 			this->traFootGenerator.mpc_update(y, x, 100, 1.);
-			this->traFootGenerator.mpc_solve();
+			this->traFootGenerator.mpc_solve(1);
 			this->footAcc.setZero();
 			this->footAcc.block(0, 0, 2, 1) = this->traFootGenerator.getOutput().block(0, 0, 2, 1);
 			this->footAcc.block(0, 1, 2, 1) = this->traFootGenerator.getOutput().block(2, 0, 2, 1);
@@ -520,7 +520,7 @@ namespace Quadruped {
 			y.block(14, 0, 8, 1).setZero();
 
 			this->traGenerator.mpc_update(y, x, 100, 1.);
-			this->traGenerator.mpc_solve();
+			this->traGenerator.mpc_solve(0);
 
 			this->bodyAcc = this->traGenerator.getOutput().block(0,0,3,1);
 			// 生成机身速度
@@ -571,7 +571,7 @@ namespace Quadruped {
 
 	public:
 		/* 构造函数 */
-		BalanceJointPlanning() : traGenerator(PL_LOW)
+		BalanceJointPlanning() : traGenerator(PL_NONE)
 		{
 			// 初始化参数
 			this->Pbr.setZero();

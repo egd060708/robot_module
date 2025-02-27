@@ -284,7 +284,7 @@ namespace Quadruped
         x.block<3, 1>(3, 0) = currentBalanceState.r_dot;
         balanceController.mpc_update(y, x, 100, 0.002);
         balanceController.mpc_init(A, B, Q, F, R, W, dt);
-        balanceController.mpc_solve();
+        balanceController.mpc_solve(0);
         for (int i = 0; i < 4; i++)
         {
             this->mpcOut.col(i) = -bodyObject->Rsb_c.transpose() * balanceController.getOutput().block<3, 1>(3 * i, 0);
@@ -494,7 +494,7 @@ namespace Quadruped
         std::cout << "currenRdot: " << currentBalanceState.r_dot << std::endl;*/
         balanceController.mpc_update(y, x, 100, 0.02);
         balanceController.mpc_init(A, B, Q, F, R, W, dt);
-        balanceController.mpc_solve();
+        balanceController.mpc_solve(0);
         for (int i = 0; i < 4; i++)
         {
             this->mpcOut.col(i) = -bodyObject->Rsb_c.transpose() * balanceController.getOutput().block<3, 1>(3 * i, 0);
@@ -776,7 +776,7 @@ namespace Quadruped
         x.block<4, 1>(6, 0) = currentBalanceState.pe_dot;
         balanceController.mpc_update(y, x, 100, 0.002);
         balanceController.mpc_init(A, B, Q, F, R, W, dt);
-        balanceController.mpc_solve();
+        balanceController.mpc_solve(0);
         for (int i = 0; i < 4; i++)
         {
             this->mpcOut.block(0,i,3,1) = -bodyObject->Rsb_c.transpose() * balanceController.getOutput().block<3, 1>(3 * i, 0);
@@ -829,15 +829,15 @@ namespace Quadruped
     public:
         // 机器人平衡控制器
         mpcCal<23, 16, 28, 1, 5> balanceController;
-        double u = 0.7;// 摩擦系数
+        double u = 0.8;// 摩擦系数
         double force_cz = 750;// 输出竖直力限制限制
-        double force_cxy = 550;// 输出水平力矩限制
+        double force_cxy = 750;// 输出水平力矩限制
         double tau_c = 20; // 输出力矩限制
         Eigen::Vector3d g = Eigen::Vector3d(0, 0, -9.81);
         double fftauRatio[4] = { 0.5 };
 
         // 构造函数
-        QpwPVCtrl(Body* _obj, LegCtrl* _legsCtrl[4], int timeStep) :CtrlBase(_obj, _legsCtrl, timeStep), balanceController(PL_NONE)
+        QpwPVCtrl(Body* _obj, LegCtrl* _legsCtrl[4], int timeStep) :CtrlBase(_obj, _legsCtrl, timeStep), balanceController(PL_LOW)
         {
             dynamicLeft.resize(10, 16);
             dynamicRight.resize(10, 10);
@@ -914,6 +914,7 @@ namespace Quadruped
 
         // 更新机器人动力学方程（描述为 left*[f] = right）
         void updateDynamic() override;
+        void updateDynamic(const Eigen::Matrix3d& _slope);
         // 导入权重参数
         void importWeight(const VectorXd& _Q, const VectorXd& _F, const VectorXd& _R, const VectorXd& _W) override;
         // 导入力参数
@@ -926,7 +927,8 @@ namespace Quadruped
         // 执行mpc控制器
         void mpc_adjust(const VectorX<bool>& _enList) override;
         // 设置接触约束
-        void setContactConstrain(const Vector4i& _contact, Eigen::Matrix<double, 3, 4>& _swingForce);
+        void setContactConstrain(const Vector4i& _contact,const Eigen::Matrix<double, 3, 4>& _swingForce);
+        void setContactConstrain(const Vector4i& _contact, const Eigen::Matrix<double, 3, 4>& _swingForce, const Eigen::Matrix3d& _slope);
         // 直接设置四足输出
         void setLegsForce(const Eigen::Matrix<double, 3, 4>& _force, const Eigen::Vector4d& _tau);
         // 四足腾空处理
@@ -969,6 +971,44 @@ namespace Quadruped
         /*s(3, 0) = -fftauRatio[3];*/
         s(3, 0) = -1;
         dynamicLeft.block(6, 9, 4, 3) = s * bodyObject->Rsbh_c.transpose();
+    }
+
+    void QpwPVCtrl::updateDynamic(const Eigen::Matrix3d& _slope)
+    {
+        for (int i = 0; i < 4; i++)
+        {
+            // 四足接触点位置反对称矩阵的计算
+            //dynamicLeft.block<3, 3>(0, i * 3) = Rsb_c;
+            Vector3d Pbi = Vector3d::Zero();
+            Pbi = bodyObject->Rsb_c * (bodyObject->currentBodyState.leg_b[i].Position - bodyObject->P);
+            //Pbi = (currentBodyState.leg_b[i].Position - Pb);
+            dynamicLeft.block<3, 3>(0, i * 3) = fftauRatio[i] * Eigen::Matrix3d::Identity();
+            dynamicLeft.block<3, 3>(3, i * 3) = fftauRatio[i] * bodyObject->v3_to_m3(Pbi);
+
+            // 轮相关物理参数更新
+            dynamicRight(6 + i, 6 + i) = bodyObject->legs[i]->Ic[3](1) / pow(bodyObject->legs[i]->Reff, 2) + bodyObject->legs[i]->Mc[3];
+            dynamicLeft(6 + i, 12 + i) = 1. / bodyObject->legs[i]->Reff;
+        }
+        dynamicRight.block<3, 3>(0, 0) = bodyObject->M;
+        dynamicRight.block<3, 3>(3, 3) = bodyObject->Rsb_c * bodyObject->I * bodyObject->Rsb_c.transpose()/* * bodyObject->dEuler2W*/;
+
+        // 为了减少计算量，轮速规划是基于车体坐标系的，因此要对世界坐标系的力做映射
+        Eigen::Matrix<double, 4, 3> s = Eigen::Matrix<double, 4, 3>::Zero();
+        //s(0, 0) = -fftauRatio[0];
+        s(0, 0) = -1;
+        dynamicLeft.block(6, 0, 4, 3) = s * bodyObject->Rsbh_c.transpose() * _slope.transpose();
+        s(0, 0) = 0;
+        /*s(1, 0) = -fftauRatio[1];*/
+        s(1, 0) = -1;
+        dynamicLeft.block(6, 3, 4, 3) = s * bodyObject->Rsbh_c.transpose() * _slope.transpose();
+        s(1, 0) = 0;
+        //s(2, 0) = -fftauRatio[2];
+        s(2, 0) = -1;
+        dynamicLeft.block(6, 6, 4, 3) = s * bodyObject->Rsbh_c.transpose() * _slope.transpose();
+        s(2, 0) = 0;
+        /*s(3, 0) = -fftauRatio[3];*/
+        s(3, 0) = -1;
+        dynamicLeft.block(6, 9, 4, 3) = s * bodyObject->Rsbh_c.transpose() * _slope.transpose();
     }
 
     void QpwPVCtrl::importWeight(const VectorXd& _Q, const VectorXd& _F, const VectorXd& _R, const VectorXd& _W)
@@ -1050,7 +1090,7 @@ namespace Quadruped
         x.block<3, 1>(20, 0) = g;
         balanceController.mpc_update(y, x, 100, 0.02);
         balanceController.mpc_init(A, B, Q, F, R, W, dt);
-        balanceController.mpc_solve();
+        balanceController.mpc_solve(0);
         for (int i = 0; i < 4; i++)
         {
             this->mpcOut.block(0, i, 3, 1) = -bodyObject->Rsb_c.transpose() * balanceController.getOutput().block<3, 1>(3 * i, 0);
@@ -1058,7 +1098,7 @@ namespace Quadruped
         }
     }
 
-    void QpwPVCtrl::setContactConstrain(const Vector4i& _contact, Eigen::Matrix<double, 3, 4>& _swingForce)
+    void QpwPVCtrl::setContactConstrain(const Vector4i& _contact,const Eigen::Matrix<double, 3, 4>& _swingForce)
     {
         Eigen::Matrix<double, 5, 3> _fcA;
         _fcA.setZero();
@@ -1080,7 +1120,61 @@ namespace Quadruped
             }
             else
             {
-                _fcA << 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+                _fcA << 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0;
+                _Aub.setZero();
+                _tcA(0 + 2 * i, 2 + 3 * i) = 0;
+                _tcA(1 + 2 * i, 2 + 3 * i) = 0;
+                _tcA(0 + 2 * i, 12 + i) = 1.;
+                _tcA(1 + 2 * i, 12 + i) = 0;
+                // 如果不接触那么就更新摆动力到mpc控制器中
+                this->balanceController.updateLastU(_swingForce.col(i), i * 3, 3);
+            }
+            this->cA.block<5, 3>(5 * i, 3 * i) = _fcA;
+            this->Aub.block<5, 1>(5 * i, 0) = _Aub;
+        }
+        this->cA.block(20, 0, 8, 16) = _tcA;
+        for (int i = 0; i < 4; i++)
+        {
+            lb(3 * i, 0) = -force_cxy;
+            lb(3 * i + 1, 0) = -force_cxy;
+            lb(3 * i + 2, 0) = -force_cz;
+            ub(3 * i, 0) = force_cxy;
+            ub(3 * i + 1, 0) = force_cxy;
+            ub(3 * i + 2, 0) = force_cz;
+        }
+        lb.block(12, 0, 4, 1).setConstant(-tau_c);
+        ub.block(12, 0, 4, 1).setConstant(tau_c);
+    }
+
+    void QpwPVCtrl::setContactConstrain(const Vector4i& _contact, const Eigen::Matrix<double, 3, 4>& _swingForce, const Eigen::Matrix3d& _slope)
+    {
+        Eigen::Matrix<double, 5, 3> _fcA;
+        _fcA.setZero();
+        Eigen::Matrix<double, 5, 1> _Aub;
+        _Aub.setZero();
+        Eigen::Matrix<double, 8, 16> _tcA;
+        _tcA.setZero();
+        // 若该腿不触地，则清零约束矩阵
+        for (int i = 0; i < 4; i++)
+        {
+            if (_contact(i) == 1)
+            {
+                _fcA << 1, 0, u, -1, 0, u, 0, 1, u, 0, -1, u, 0, 0, 1;
+                _fcA = _fcA * _slope.transpose();
+                _Aub.setConstant(100000.);
+                _tcA(0 + 2 * i, 2 + 3 * i) = u;
+                _tcA(1 + 2 * i, 2 + 3 * i) = u;
+                _tcA.block(2 * i, 3 * i, 2, 3) = _tcA.block(2 * i, 3 * i, 2, 3) * bodyObject->Rsbh_c.transpose() * _slope.transpose();
+                _tcA(0 + 2 * i, 12 + i) = 1. / bodyObject->legs[i]->Reff;
+                _tcA(1 + 2 * i, 12 + i) = -1. / bodyObject->legs[i]->Reff;
+                /*_tcA(0 + 2 * i, 2 + 3 * i) = 0;
+                _tcA(1 + 2 * i, 2 + 3 * i) = 0;
+                _tcA(0 + 2 * i, 12 + i) = 0.;
+                _tcA(1 + 2 * i, 12 + i) = 0;*/
+            }
+            else
+            {
+                _fcA << 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0;
                 _Aub.setZero();
                 _tcA(0 + 2 * i, 2 + 3 * i) = 0;
                 _tcA(1 + 2 * i, 2 + 3 * i) = 0;
