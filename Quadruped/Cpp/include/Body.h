@@ -100,6 +100,7 @@ namespace Quadruped
         void updateEqBody();
         /* 接触预测 */
         void estimateContact(const Vector4i& _contact_t, const double& _t);
+        void estimateContact(const Vector4i& _contact_t, const double& _t, const Matrix3d& _slope);
 
         /* 更新目标位姿 */
         void updateBodyTargetPos(Vector3d _angle, Vector3d _position);
@@ -382,6 +383,68 @@ namespace Quadruped
                 last_t[i] = _t;// 记录接触的时刻
             }
             if (this->currentWorldState.contactEst(i) == 0 && this->currentWorldState.leg_s[i].extForce(2) > 125.)
+            {
+                this->currentWorldState.contactEst(i) = 1;
+            }
+            if (vacantCheck[i] == 0 && this->currentWorldState.contactEst(i) == 1 && (_t - last_t[i]) > 0.1)
+            {
+                vacantCheck[i] = 1;
+            }
+
+            // 混合接触相位，上升沿参考被动检测，下降沿参考步态周期规划
+            if (mixContact(i) == 0)
+            {
+                if (this->currentWorldState.contactEst(i) == 1 && lastContact_c(i) == 0)
+                {
+                    mixContact(i) = 1;
+                }
+                if (this->targetWorldState.contactEst(i) == 1)
+                {
+                    mixContact(i) = 1;
+                }
+            }
+            else
+            {
+                if (this->targetWorldState.contactEst(i) == 0 && lastContact_t(i) == 1)
+                {
+                    mixContact(i) = 0;
+                }
+            }
+        }
+        lastContact_c = this->currentWorldState.contactEst;
+        lastContact_t = this->targetWorldState.contactEst;
+    }
+
+    void Body::estimateContact(const Vector4i& _contact_t, const double& _t, const Matrix3d& _slope)
+    {
+        static LPF_SecondOrder_Classdef extForceF[4][3] = { {LPF_SecondOrder_Classdef(CUTOFFHZ,500),LPF_SecondOrder_Classdef(CUTOFFHZ,500),LPF_SecondOrder_Classdef(CUTOFFHZ,500)},\
+                                                            {LPF_SecondOrder_Classdef(CUTOFFHZ, 500), LPF_SecondOrder_Classdef(CUTOFFHZ, 500), LPF_SecondOrder_Classdef(CUTOFFHZ, 500)},\
+                                                            {LPF_SecondOrder_Classdef(CUTOFFHZ, 500), LPF_SecondOrder_Classdef(CUTOFFHZ, 500), LPF_SecondOrder_Classdef(CUTOFFHZ, 500)},\
+                                                            {LPF_SecondOrder_Classdef(CUTOFFHZ, 500), LPF_SecondOrder_Classdef(CUTOFFHZ, 500), LPF_SecondOrder_Classdef(CUTOFFHZ, 500)} };
+        static int vacantCheck[4] = { 1,1,1,1 };
+        static double last_t[4] = { 0 };
+        static Vector4i lastContact_c = Vector4i::Ones();
+        static Vector4i lastContact_t = Vector4i::Ones();
+
+        this->targetWorldState.contactEst = _contact_t;
+        for (int i = 0; i < 4; i++)
+        {
+            Vector3d extForce = this->legs[i]->Mc[3] * (this->currentWorldState.leg_s[i].Acc/* - Vector3d(0, 0, -9.81)*/) - this->currentWorldState.leg_s[i].Force;
+            //this->currentWorldState.leg_s[i].extForce = extForce;
+            this->currentWorldState.leg_s[i].extForce(0) = extForceF[i][0].f(extForce(0));
+            this->currentWorldState.leg_s[i].extForce(1) = extForceF[i][1].f(extForce(1));
+            this->currentWorldState.leg_s[i].extForce(2) = extForceF[i][2].f(extForce(2));
+            if (vacantCheck[i] == 1 && (_slope.transpose() * this->currentWorldState.leg_s[i].extForce)(2) < 100.)
+            {
+                this->currentWorldState.contactEst(i) = 0;
+                vacantCheck[i] = 0;
+            }
+            if ((_slope.transpose() * this->currentWorldState.leg_s[i].Acc)(2) > 225.)
+            {
+                this->currentWorldState.contactEst(i) = 1;
+                last_t[i] = _t;// 记录接触的时刻
+            }
+            if (this->currentWorldState.contactEst(i) == 0 && (_slope.transpose() * this->currentWorldState.leg_s[i].extForce)(2) > 125.)
             {
                 this->currentWorldState.contactEst(i) = 1;
             }

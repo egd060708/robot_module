@@ -519,7 +519,7 @@ namespace Quadruped {
 			y.block(12, 0, 2, 1) = this->Plt.col(3).segment(0, 2);
 			y.block(14, 0, 8, 1).setZero();
 
-			this->traGenerator.mpc_update(y, x, 100, 1.);
+			this->traGenerator.mpc_update(y, x, 1000, 0.02);
 			this->traGenerator.mpc_solve(0);
 
 			this->bodyAcc = this->traGenerator.getOutput().block(0,0,3,1);
@@ -534,8 +534,9 @@ namespace Quadruped {
 			// 生成机身位置
 			this->Pbr = this->Pbr + 0.5 * 0.002 * (last_Vbr + this->Vbr);
 			// 位置约束
-			/*this->Pbr(0) = constrain(this->Pbr(0), this->Pbc(0) + 0.2, this->Pbc(0) - 0.2);
-			this->Pbr(1) = constrain(this->Pbr(1), this->Pbc(1) + 0.2, this->Pbc(1) - 0.2);*/
+			this->Pbr(0) = slopeConstrain(this->Pbr(0), this->Pbc(0), 0.3, -0.3);
+			this->Pbr(1) = slopeConstrain(this->Pbr(1), this->Pbc(1), 0.3, -0.3);
+			//this->Pbr(2) = slopeConstrain(this->Pbr(2), this->Pbc(2), 0.01, -0.01);
 			this->Pbr(2) = constrain(this->Pbr(2), 0.6, 0.425);
 			last_Vbr = this->Vbr;
 
@@ -571,7 +572,7 @@ namespace Quadruped {
 
 	public:
 		/* 构造函数 */
-		BalanceJointPlanning() : traGenerator(PL_NONE)
+		BalanceJointPlanning() : traGenerator(PL_LOW)
 		{
 			// 初始化参数
 			this->Pbr.setZero();
@@ -648,7 +649,16 @@ namespace Quadruped {
 		{
 			return this->Rsb_c * this->Vbr;
 		}
-
+		Eigen::Matrix<double, 3, 4> getFootPlanPositionWorld()
+		{
+			Eigen::Matrix<double, 3, 4> realPlr;
+			for (int i = 0; i < 4; i++)
+			{
+				realPlr.col(i) = this->Pbr + this->Rsb_c * this->Plr.col(i);
+				realPlr.col(i)(2) = 0;
+			}
+			return realPlr;
+		}
 	};
 
 }

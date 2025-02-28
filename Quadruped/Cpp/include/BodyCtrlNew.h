@@ -837,7 +837,7 @@ namespace Quadruped
         double fftauRatio[4] = { 0.5 };
 
         // 构造函数
-        QpwPVCtrl(Body* _obj, LegCtrl* _legsCtrl[4], int timeStep) :CtrlBase(_obj, _legsCtrl, timeStep), balanceController(PL_LOW)
+        QpwPVCtrl(Body* _obj, LegCtrl* _legsCtrl[4], int timeStep) :CtrlBase(_obj, _legsCtrl, timeStep), balanceController(PL_NONE)
         {
             dynamicLeft.resize(10, 16);
             dynamicRight.resize(10, 10);
@@ -1046,6 +1046,7 @@ namespace Quadruped
         for (int i = 0; i < 4; i++)
         {
             currentBalanceState.pe(i) = (bodyObject->Rsbh_c.transpose() * bodyObject->Rsb_c * bodyObject->currentBodyState.leg_b[i].Position)(0);
+            //currentBalanceState.pe(i) = bodyObject->currentWorldState.leg_s[i].Position(0);
             currentBalanceState.pe_dot(i) = (bodyObject->Rsbh_c.transpose() * bodyObject->currentWorldState.leg_s[i].VelocityW)(0);
         }
         //std::cout << "cbpe: \n" << currentBalanceState.pe_dot << std::endl;
@@ -1053,8 +1054,26 @@ namespace Quadruped
 
     void QpwPVCtrl::setPositionTarget(const Vector3d& _p, const Vector3d& _r, const Vector4d& _pe)
     {
+        static MeanFilter<50> _rFilter[3];
+        Eigen::Vector3d real_pt = Eigen::Vector3d::Zero();
+        double num = 0;
+        for (int i = 0; i < 4; i++)
+        {
+            if (bodyObject->mixContact(i) == 1)
+            {
+                num += 1.;
+                real_pt = real_pt + bodyObject->getFKFeetPos().col(i);
+            }
+        }
+        real_pt = real_pt / num;
+        real_pt(2) = _p(2);
+        
         targetBalanceState.p = _p;
+        //targetBalanceState.p = real_pt;
         targetBalanceState.r = _r;
+        /*targetBalanceState.r(0) = _rFilter[0].f(_r(0));
+        targetBalanceState.r(1) = _rFilter[1].f(_r(1));
+        targetBalanceState.r(2) = _rFilter[2].f(_r(2));*/
         targetBalanceState.pe = _pe;
     }
 
@@ -1088,7 +1107,7 @@ namespace Quadruped
         x.block<3, 1>(13, 0) = currentBalanceState.r_dot;
         x.block<4, 1>(16, 0) = currentBalanceState.pe_dot;
         x.block<3, 1>(20, 0) = g;
-        balanceController.mpc_update(y, x, 100, 0.02);
+        balanceController.mpc_update(y, x, 1000, 0.02);
         balanceController.mpc_init(A, B, Q, F, R, W, dt);
         balanceController.mpc_solve(0);
         for (int i = 0; i < 4; i++)
@@ -1167,6 +1186,7 @@ namespace Quadruped
                 _tcA.block(2 * i, 3 * i, 2, 3) = _tcA.block(2 * i, 3 * i, 2, 3) * bodyObject->Rsbh_c.transpose() * _slope.transpose();
                 _tcA(0 + 2 * i, 12 + i) = 1. / bodyObject->legs[i]->Reff;
                 _tcA(1 + 2 * i, 12 + i) = -1. / bodyObject->legs[i]->Reff;
+                this->Aub.block(20 + 2 * i, 0, 2, 1).setConstant(100000.);
                 /*_tcA(0 + 2 * i, 2 + 3 * i) = 0;
                 _tcA(1 + 2 * i, 2 + 3 * i) = 0;
                 _tcA(0 + 2 * i, 12 + i) = 0.;
@@ -1180,6 +1200,7 @@ namespace Quadruped
                 _tcA(1 + 2 * i, 2 + 3 * i) = 0;
                 _tcA(0 + 2 * i, 12 + i) = 1.;
                 _tcA(1 + 2 * i, 12 + i) = 0;
+                this->Aub.block(20 + 2 * i, 0, 2, 1).setZero();
                 // 如果不接触那么就更新摆动力到mpc控制器中
                 this->balanceController.updateLastU(_swingForce.col(i), i * 3, 3);
             }
@@ -1198,6 +1219,9 @@ namespace Quadruped
         }
         lb.block(12, 0, 4, 1).setConstant(-tau_c);
         ub.block(12, 0, 4, 1).setConstant(tau_c);
+        /*std::cout << "cA: " << this->cA.block(0, 0, 28, 16) << std::endl;
+        std::cout << "Alb: " << this->Alb.block(0, 0, 28, 1).transpose() << std::endl;
+        std::cout << "Aub: " << this->Aub.block(0, 0, 28, 1).transpose() << std::endl;*/
     }
 
     void QpwPVCtrl::setLegsForce(const Eigen::Matrix<double, 3, 4>& _force, const Eigen::Vector4d& _tau)
