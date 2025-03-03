@@ -54,6 +54,7 @@ namespace Quadruped
         Matrix3d Rsb_c = Matrix3d::Identity(); // (当前)世界坐标系到机身坐标系的旋转矩阵映射
         Matrix3d Rsbh_c = Matrix3d::Identity();// (当前)世界坐标系到机身水平坐标系的旋转矩阵映射
         Matrix4d Tsb_c = Matrix4d::Identity(); // (当前)世界坐标系到机身坐标系的齐次变换映射
+        Matrix4d Tsbh_c = Matrix4d::Identity(); // (当前)世界坐标系到机身水平坐标系的齐次变换映射
         Matrix3d Rsb_t = Matrix3d::Identity(); // (目标)世界坐标系到机身坐标系的旋转矩阵映射
         Matrix4d Tsb_t = Matrix4d::Identity(); // (目标)世界坐标系到机身坐标系的齐次变换映射
         Matrix3d dEuler2W = Matrix3d::Identity(); // 轴角速度转到欧拉角角速度
@@ -193,6 +194,8 @@ namespace Quadruped
             Rsbh_c = rotationz_c.toRotationMatrix();
             Tsb_c.block<3, 3>(0, 0) = Rsb_c;
             Tsb_c.block<3, 1>(0, 3) = currentWorldState.dist;
+            Tsbh_c.block<3, 3>(0, 0) = Rsbh_c;
+            Tsbh_c.block<3, 1>(0, 3) = currentWorldState.dist;
             this->dEuler2W = this->eulerVelToRotVel(currentBodyState.Ang_xyz);
             // 更新其他世界坐标系下的变量
             currentWorldState.angVel_xyz = Rsb_c * currentBodyState.angVel_xyz;

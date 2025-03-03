@@ -1080,6 +1080,7 @@ namespace Quadruped
     void QpwPVCtrl::setVelocityTarget(const Vector3d& _p_dot, const Vector3d& _r_dot, const Vector4d& _pe_dot)
     {
         targetBalanceState.p_dot = _p_dot;
+        targetBalanceState.p_dot(2) = 0;
         targetBalanceState.r_dot = _r_dot;
         targetBalanceState.pe_dot = _pe_dot;
     }

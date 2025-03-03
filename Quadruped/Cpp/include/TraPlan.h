@@ -21,6 +21,8 @@ namespace Quadruped {
 		/* 坐标转换 */
 		Eigen::Matrix3d Rsb_c;
 		Eigen::Matrix3d Rsbh_c;
+		Eigen::Matrix4d Tsb_c;
+		Eigen::Matrix4d Tsbh_c;
 	public:
 		PlanBase()
 		{
@@ -37,10 +39,12 @@ namespace Quadruped {
 			this->Plr.setZero();
 			this->Vlr.setZero();
 		}
-		void updateRsb(const Matrix3d& _Rsb, const Matrix3d& _Rsbh)
+		void updateRsb(const Matrix3d& _Rsb, const Matrix3d& _Rsbh, const Matrix4d& _Tsb, const Matrix4d& _Tsbh)
 		{
 			this->Rsb_c = _Rsb;
 			this->Rsbh_c = _Rsbh;
+			this->Tsb_c = _Tsb;
+			this->Tsbh_c = _Tsbh;
 		}
 		void updateBodyHighLevelTar(const Vector3d& _Pbt, const Vector3d& _Vbt)
 		{
@@ -105,6 +109,21 @@ namespace Quadruped {
 		void setInitFootPlanVelocity(const Eigen::Matrix<double, 3, 4>& _Vlr)
 		{
 			this->Vlr = _Vlr;
+		}
+
+		Eigen::VectorXd normConstrain(const Eigen::VectorXd& _cur, const Eigen::VectorXd& _ref, const double& _value)
+		{
+			double scale = (_cur - _ref).norm() / _value;
+			Eigen::VectorXd ret;
+			if (scale > 1.)
+			{
+				ret = _ref + (_cur - _ref).normalized() * _value;
+			}
+			else
+			{
+				ret = _cur;
+			}
+			return ret;
 		}
 	};
 
@@ -420,19 +439,28 @@ namespace Quadruped {
 		double fbp;
 
 		/* 配置关键不等式约束 */
-		void updateJointIeqConstrain(const Eigen::Vector<double, 11>& _aMax)
+		void updateJointIeqConstrain(const Eigen::Vector<double, 11>& _aMax, const Eigen::Vector3d& _bhAcc)
 		{
 			// 平衡约束转化为线性锥约束
 			Eigen::Matrix<double, 8, 3> cbA;
 			cbA.setZero();
 			cbA << 1, 0, this->balanceConeX, -1, 0, this->balanceConeX, 0, 1, this->balanceConeY, 0, -1, this->balanceConeY, \
 				1, 1, 0, 1, -1, 0, -1, 1, 0, -1, -1, 0;
+			/*cbA <<0, 0, this->balanceConeX, 0, 0, this->balanceConeY, 0, 0, this->balanceConeX, 0, 0, this->balanceConeY, \
+				1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1, 0;*/
 			Eigen::Vector<double, 8> Abub, Ablb;
 			Abub.block(0, 0, 2, 1).setConstant(-(this->balanceConeX * -9.81));
 			Abub.block(2, 0, 2, 1).setConstant(-(this->balanceConeY * -9.81));
-			Ablb.block(0, 0, 4, 1).setConstant(-100000.);
 			Abub.block(4, 0, 4, 1).setConstant(_aMax.segment(0, 2).norm());
+			/*Abub.block(0, 0, 2, 1).setConstant(-abs(_bhAcc(0)) - (this->balanceConeX * -9.81));
+			Abub.block(2, 0, 2, 1).setConstant(-abs(_bhAcc(1)) - (this->balanceConeY * -9.81));
+			Abub.block(4, 0, 2, 1).setConstant(-this->balanceConeX * (_bhAcc(2) - 2 * 9.81));
+			Abub.block(6, 0, 2, 1).setConstant(-this->balanceConeY * (_bhAcc(2) - 2 * 9.81));*/
+
+			Ablb.block(0, 0, 4, 1).setConstant(-100000.);
 			Ablb.block(4, 0, 4, 1).setConstant(-_aMax.segment(0, 2).norm());
+			//Ablb.block(0, 0, 8, 1).setConstant(-100000.);
+
 
 			// 对足端的加速度边界不等式约束设置所有边界
 			Eigen::Matrix<double, 16, 11> cfA;
@@ -450,7 +478,7 @@ namespace Quadruped {
 				Aflb(4 * i + 1) = this->fbp * this->balanceConeX * (-9.81);
 				Aflb(4 * i + 2) = this->fbp * this->balanceConeY * (-9.81);
 				Aflb(4 * i + 3) = this->fbp * this->balanceConeY * (-9.81);
-				// 机身x方向加速度受影响
+				// 机身水平方向加速度受影响
 				/*cfA(4 * i + 0, 0) = -1;
 				cfA(4 * i + 1, 0) = 1; 
 				cfA(4 * i + 2, 1) = -1;
@@ -490,6 +518,57 @@ namespace Quadruped {
 			std::cout << "Alb:\n" << Alb.transpose() << std::endl;*/
 
 			traGenerator.setBoxConstrain(cA, Alb, Aub);
+
+			// 根据加速度观测增加额外的约束
+			static MeanFilter<10> accF[3];
+			double bhAccX = accF[0].f(_bhAcc(0));
+			double bhAccY = accF[1].f(_bhAcc(1));
+			double bhAccZ = accF[2].f(_bhAcc(2));
+			Eigen::Vector<double, 11> ub, lb;
+			ub = _aMax.cwiseAbs();
+			lb = -_aMax.cwiseAbs();
+			if ((-abs(bhAccX) - (this->balanceConeX * -9.81)) / this->balanceConeX < (-abs(bhAccY) - (this->balanceConeY * -9.81)) / this->balanceConeY)
+			{
+				ub(2) = (-abs(bhAccX) - (this->balanceConeX * -9.81)) / this->balanceConeX;
+			}
+			else
+			{
+				ub(2) = (-abs(bhAccY) - (this->balanceConeY * -9.81)) / this->balanceConeY;
+			}
+			ub(2) = constrain(ub(2), _aMax.cwiseAbs()(2), -_aMax.cwiseAbs()(2));
+			if (bhAccZ > 18.)
+			{
+				bhAccZ = 18.;
+			}
+			ub(0) = constrain(-this->balanceConeX * (bhAccZ - 2 * 9.81), _aMax.cwiseAbs()(0), -_aMax.cwiseAbs()(0));
+			lb(0) = constrain(this->balanceConeX * (bhAccZ - 2 * 9.81), _aMax.cwiseAbs()(0), -_aMax.cwiseAbs()(0));
+			ub(1) = constrain(-this->balanceConeY * (bhAccZ - 2 * 9.81), _aMax.cwiseAbs()(1), -_aMax.cwiseAbs()(1));
+			lb(1) = constrain(this->balanceConeY * (bhAccZ - 2 * 9.81), _aMax.cwiseAbs()(1), -_aMax.cwiseAbs()(1));
+
+			double edge[4] = { -bhAccX + this->fbp * this->balanceConeX * (bhAccZ - 2 * 9.81), \
+								bhAccX + this->fbp * this->balanceConeX * (bhAccZ - 2 * 9.81), \
+								-bhAccY + this->fbp * this->balanceConeX * (bhAccZ - 2 * 9.81), \
+								bhAccY + this->fbp * this->balanceConeX * (bhAccZ - 2 * 9.81) };
+			lb(3) = bhAccX > 0 ? edge[0] : edge[1];
+			lb(4) = bhAccY > 0 ? edge[2] : edge[3];
+			lb(5) = bhAccX > 0 ? edge[0] : edge[1];
+			ub(6) = -(bhAccY > 0 ? edge[2] : edge[3]);
+			ub(7) = -(bhAccX > 0 ? edge[0] : edge[1]);
+			lb(8) = bhAccY > 0 ? edge[2] : edge[3];
+			ub(9) = -(bhAccX > 0 ? edge[0] : edge[1]);
+			ub(10) = -(bhAccY > 0 ? edge[2] : edge[3]);
+
+			lb(3) = constrain(lb(3), _aMax.cwiseAbs()(3), -_aMax.cwiseAbs()(3));
+			lb(4) = constrain(lb(4), _aMax.cwiseAbs()(4), -_aMax.cwiseAbs()(4));
+			lb(5) = constrain(lb(5), _aMax.cwiseAbs()(5), -_aMax.cwiseAbs()(5));
+			ub(6) = constrain(ub(6), _aMax.cwiseAbs()(6), -_aMax.cwiseAbs()(6));
+			ub(7) = constrain(ub(7), _aMax.cwiseAbs()(7), -_aMax.cwiseAbs()(7));
+			lb(8) = constrain(lb(8), _aMax.cwiseAbs()(8), -_aMax.cwiseAbs()(8));
+			ub(9) = constrain(ub(9), _aMax.cwiseAbs()(9), -_aMax.cwiseAbs()(9));
+			ub(10) = constrain(ub(10), _aMax.cwiseAbs()(10), -_aMax.cwiseAbs()(10));
+			this->traGenerator.setConstrain(lb, ub);
+			//std::cout << "ub: " << ub.block(0, 0, 3, 1).transpose() << std::endl;
+			//std::cout << "lb: " << lb.block(0, 0, 3, 1).transpose() << std::endl;
 		}
 
 		/* 求解规划器 */
@@ -530,14 +609,16 @@ namespace Quadruped {
 			this->Vbr(1) = slopeConstrain(this->Vbr(1), this->Vbc(1), 0.1, -0.1);*/
 			/*this->Vbr(0) = constrain(this->Vbr(0), 2.5, -2.5);
 			this->Vbr(1) = constrain(this->Vbr(1), 2.5, -2.5);*/
-			this->Vbr(2) = constrain(this->Vbr(2), 1., -1.);
+			this->Vbr.block(0, 0, 2, 1) = this->normConstrain(this->Vbr.block(0, 0, 2, 1), this->Vbc.block(0, 0, 2, 1), 1.5);
+			this->Vbr(2) = constrain(this->Vbr(2), 0.5, -0.5);
 			// 生成机身位置
 			this->Pbr = this->Pbr + 0.5 * 0.002 * (last_Vbr + this->Vbr);
 			// 位置约束
-			this->Pbr(0) = slopeConstrain(this->Pbr(0), this->Pbc(0), 0.3, -0.3);
-			this->Pbr(1) = slopeConstrain(this->Pbr(1), this->Pbc(1), 0.3, -0.3);
+			/*this->Pbr(0) = slopeConstrain(this->Pbr(0), this->Pbc(0), 0.3, -0.3);
+			this->Pbr(1) = slopeConstrain(this->Pbr(1), this->Pbc(1), 0.3, -0.3);*/
 			//this->Pbr(2) = slopeConstrain(this->Pbr(2), this->Pbc(2), 0.01, -0.01);
-			this->Pbr(2) = constrain(this->Pbr(2), 0.6, 0.425);
+			this->Pbr.block(0, 0, 2, 1) = this->normConstrain(this->Pbr.block(0, 0, 2, 1), this->Pbc.block(0, 0, 2, 1), 0.3);
+			this->Pbr(2) = constrain(this->Pbr(2), 0.6, 0.45);
 			last_Vbr = this->Vbr;
 
 			//std::cout << "gen: " << this->Pbr << std::endl;
@@ -554,18 +635,7 @@ namespace Quadruped {
 			// 位置约束
 			for (int i = 0; i < 4; i++)
 			{
-				double lLastSquare = 0.8 * 0.8 - this->Pbc(2) * this->Pbc(2);
-				if (lLastSquare > 0)
-				{
-					if ((this->Plr.col(i) - this->Pli.col(i)).squaredNorm() > lLastSquare)
-					{
-						this->Plr.col(i) = this->Pli.col(i) + (this->Plr.col(i) - this->Pli.col(i)).normalized() * sqrt(lLastSquare);
-					}
-				}
-				else
-				{
-					this->Plr.col(i) = this->Pli.col(i);
-				}
+				this->Plr.col(i) = this->normConstrain(this->Plr.col(i), this->Pli.col(i), 0.8);
 			}
 
 		}
@@ -581,6 +651,12 @@ namespace Quadruped {
 			this->Vlr.setZero();
 			this->Rsb_c.setIdentity();
 			this->Rsbh_c.setIdentity();
+			this->Tsb_c.setZero();
+			this->Tsb_c.block(0, 0, 3, 3).setIdentity();
+			this->Tsb_c(3, 3) = 1;
+			this->Tsbh_c.setZero();
+			this->Tsbh_c.block(0, 0, 3, 3).setIdentity();
+			this->Tsbh_c(3, 3) = 1;
 			fbp = 1.;
 		}
 		/* 规划器预热 */
@@ -589,13 +665,9 @@ namespace Quadruped {
 			this->updateSupportPolygon();
 		}
 		/* 使用机身规划器 */
-		void useJointPlan(const Eigen::Vector<double,11>& _aMax)
+		void useJointPlan(const Eigen::Vector<double,11>& _aMax, const Eigen::Vector3d& _bhAcc)
 		{
-			this->updateJointIeqConstrain(_aMax);
-			Eigen::Vector<double, 11> ub, lb;
-			ub = _aMax.cwiseAbs();
-			lb = -_aMax.cwiseAbs();
-			this->traGenerator.setConstrain(lb, ub);
+			this->updateJointIeqConstrain(_aMax, _bhAcc);
 			this->getJointSolution();
 		}
 		void updateJointParams(double _t, double _fbp, double _bMarginX, double _bMarginY, const Eigen::Matrix<double, 22, 22>& _Q, const Eigen::Matrix<double, 22, 22>& _F, const Eigen::Matrix<double, 11, 11>& _R, const Eigen::Matrix<double, 11, 11>& _W)
@@ -638,10 +710,10 @@ namespace Quadruped {
 		Eigen::Matrix<double, 3, 4> getFootPlanVelocity() override
 		{
 			Eigen::Matrix<double, 3, 4> fVbr;
-			fVbr.col(0) = this->Rsb_c.transpose() * this->Vbr;
-			fVbr.col(1) = this->Rsb_c.transpose() * this->Vbr;
-			fVbr.col(2) = this->Rsb_c.transpose() * this->Vbr;
-			fVbr.col(3) = this->Rsb_c.transpose() * this->Vbr;
+			fVbr.col(0) = this->Rsbh_c.transpose() * this->Vbr;
+			fVbr.col(1) = this->Rsbh_c.transpose() * this->Vbr;
+			fVbr.col(2) = this->Rsbh_c.transpose() * this->Vbr;
+			fVbr.col(3) = this->Rsbh_c.transpose() * this->Vbr;
 			//std::cout << fVbr << std::endl;
 			return this->Vlr + fVbr;
 		}
@@ -652,9 +724,12 @@ namespace Quadruped {
 		Eigen::Matrix<double, 3, 4> getFootPlanPositionWorld()
 		{
 			Eigen::Matrix<double, 3, 4> realPlr;
+			Eigen::Vector4d Pbi(0, 0, 0, 1);
+			Pbi.block(0, 0, 3, 1) = this->Pbr;
+			Pbi = this->Tsbh_c.inverse() * Pbi;
 			for (int i = 0; i < 4; i++)
 			{
-				realPlr.col(i) = this->Pbr + this->Rsb_c * this->Plr.col(i);
+				realPlr.col(i) = Pbi.block(0,0,3,1) + this->Plr.col(i);
 				realPlr.col(i)(2) = 0;
 			}
 			return realPlr;
