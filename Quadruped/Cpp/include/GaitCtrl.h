@@ -216,9 +216,8 @@ namespace Quadruped
 		footPos = bodyController->currentBalanceState.p + nextStep;
 		footPos(2) = 0.0;
 
-		/*footPos = bodyController->currentBalanceState.p;
-		footPos(2) = 0.0;
-		footPos = footPos + _slope.transpose() * nextStep;*/
+		/*footPos = bodyController->currentBalanceState.p + _slope.transpose() * nextStep;
+		footPos(2) = 0.0;*/
 
 		return footPos;
 	}
