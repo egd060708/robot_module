@@ -21,7 +21,7 @@ namespace Quadruped
 	public:
 		GaitCtrl(CtrlBase* _bc, LegCtrl* _lc[4], int timeStep, Eigen::Vector4d* _gaitPhase, Eigen::Vector4i* _gaitContact);
 		Eigen::Vector3d calFootPos(int legID, Eigen::Vector2d vxyTargetGlobal, double dYawTarget, double phase);
-		Eigen::Vector3d calFootPosW(int legID, Eigen::Vector2d vxyTargetGlobal, double dYawTarget, double phase, double maxStepL);
+		Eigen::Vector3d calFootPosW(int legID, Eigen::Vector2d vxyTargetGlobal, double dYawTarget, double phase, double maxStepL,const Eigen::Matrix3d& _slope);
 		void initExpectK(Eigen::Vector3d _k);// 初始化期望运动控制参数
 		void _updateFootPoints();// 更新中性立足点
 		void initSwingParams(double _period, double _stancePhaseRatio, Eigen::Vector4d _bias, double _t);// 初始化摆动相关参数
@@ -29,7 +29,7 @@ namespace Quadruped
 		void calcContactPhase(WaveStatus status, double _t, Eigen::Vector4d& _estPhase, Eigen::Vector4i& _estContact);
 		
 		void setGait(Eigen::Vector2d vxyTargetGlobal, double dYawTarget, double gaitHeight);
-		void run(Eigen::Matrix<double, 3, 4>& _feetPos, Eigen::Matrix<double, 3, 4>& _feetVel, double _maxStepL);
+		void run(Eigen::Matrix<double, 3, 4>& _feetPos, Eigen::Matrix<double, 3, 4>& _feetVel, double _maxStepL,const Eigen::Matrix3d& _slope);
 		Eigen::Vector3d getFootPos(int i);
 		Eigen::Vector3d getFootVel(int i);
 		void restart();
@@ -140,7 +140,7 @@ namespace Quadruped
 		startT = _t;
 		contactPast.setZero();
 		phasePast.setConstant(0.5);
-		statusPast = WaveStatus::WAVE_ALL;
+		statusPast = WaveStatus::STANCE_ALL;
 		Tstance = period * stRatio;
 		Tswing = period * (1 - stRatio);
 	}
@@ -184,7 +184,7 @@ namespace Quadruped
 		return footPos;
 	}*/
 
-	Eigen::Vector3d GaitCtrl::calFootPosW(int legID, Eigen::Vector2d vxyTargetGlobal, double dYawTarget, double phase, double maxStepL)
+	Eigen::Vector3d GaitCtrl::calFootPosW(int legID, Eigen::Vector2d vxyTargetGlobal, double dYawTarget, double phase, double maxStepL,const Eigen::Matrix3d& _slope)
 	{
 		// 计算xy平面的落脚点规划
 		bodyVelGlobal = bodyController->currentBalanceState.p_dot - bodyController->bodyObject->est->getEstFootVelS();
@@ -215,6 +215,10 @@ namespace Quadruped
 
 		footPos = bodyController->currentBalanceState.p + nextStep;
 		footPos(2) = 0.0;
+
+		/*footPos = bodyController->currentBalanceState.p;
+		footPos(2) = 0.0;
+		footPos = footPos + _slope.transpose() * nextStep;*/
 
 		return footPos;
 	}
@@ -351,7 +355,7 @@ namespace Quadruped
 		this->gaitHeight = _gaitHeight;
 	}
 
-	void GaitCtrl::run(Eigen::Matrix<double, 3, 4>& _feetPos, Eigen::Matrix<double, 3, 4>& _feetVel, double _maxStepL)
+	void GaitCtrl::run(Eigen::Matrix<double, 3, 4>& _feetPos, Eigen::Matrix<double, 3, 4>& _feetVel, double _maxStepL,const Eigen::Matrix3d& _slope)
 	{
 		if (is_firstRun) {
 			//startP = bodyController->bodyObject->est->getEstFeetPosS();
@@ -369,7 +373,7 @@ namespace Quadruped
 				_feetVel.col(i).setZero();
 			}
 			else {
-				endP.col(i) = calFootPosW(i, VxyTarget, dYawTarget, (*gaitPhase)(i), _maxStepL);
+				endP.col(i) = calFootPosW(i, VxyTarget, dYawTarget, (*gaitPhase)(i), _maxStepL, _slope);
 
 				_feetPos.col(i) = getFootPos(i);
 				_feetVel.col(i) = getFootVel(i);

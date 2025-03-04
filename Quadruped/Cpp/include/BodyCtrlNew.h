@@ -1237,24 +1237,14 @@ namespace Quadruped
     void QpwPVCtrl::contactDeal(const VectorXd& _oriQ, const double _ffRatio, const double _stRatio)
     {
         this->Q = _oriQ.asDiagonal();
-        if (_stRatio < 1.)
+        for (int i = 0; i < 4; i++)
         {
-            for (int i = 0; i < 4; i++)
-            {
-                this->Q(6 + i, 6 + i) = _oriQ(6 + i) * (1e-10 + bodyObject->est->_ctTrust[i]);
-                this->Q(16 + i, 16 + i) = _oriQ(16 + i) * (1 + 1e1 * (1 - bodyObject->est->_ctTrust[i]));
-                this->fftauRatio[i] = _ffRatio * bodyObject->est->_ctTrust[i];
-                /*this->Q(6 + i, 6 + i) = _oriQ(6 + i) * (1e-10 + bodyObject->mixContact(i));
-                this->Q(16 + i, 16 + i) = _oriQ(16 + i) * (1 + 1e1 * (1 - bodyObject->mixContact(i)));*/
-                //this->fftauRatio[i] = _ffRatio * bodyObject->mixContact(i);
-            }
-        }
-        else
-        {
-            for (int i = 0; i < 4; i++)
-            {
-                this->fftauRatio[i] = 1;
-            }
+            this->Q(6 + i, 6 + i) = _oriQ(6 + i) * (1e-10 + bodyObject->est->_ctTrust[i]);
+            this->Q(16 + i, 16 + i) = _oriQ(16 + i) * (1 + 1e1 * (1 - bodyObject->est->_ctTrust[i]));
+            this->fftauRatio[i] = _ffRatio * bodyObject->est->_ctTrust[i];
+            /*this->Q(6 + i, 6 + i) = _oriQ(6 + i) * (1e-10 + bodyObject->mixContact(i));
+            this->Q(16 + i, 16 + i) = _oriQ(16 + i) * (1 + 1e1 * (1 - bodyObject->mixContact(i)));*/
+            //this->fftauRatio[i] = _ffRatio * bodyObject->mixContact(i);
         }
         this->F = this->Q;
     }
