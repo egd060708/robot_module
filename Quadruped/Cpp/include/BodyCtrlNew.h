@@ -984,6 +984,7 @@ namespace Quadruped
             //Pbi = (currentBodyState.leg_b[i].Position - Pb);
             dynamicLeft.block<3, 3>(0, i * 3) = fftauRatio[i] * Eigen::Matrix3d::Identity();
             dynamicLeft.block<3, 3>(3, i * 3) = fftauRatio[i] * bodyObject->v3_to_m3(Pbi);
+            dynamicLeft.block(3, 12 + i, 3, 1) = -bodyObject->Rsbf_c[i].transpose().col(1);// 加上轮子扭矩对机身的反扭矩作用
 
             // 轮相关物理参数更新
             dynamicRight(6 + i, 6 + i) = bodyObject->legs[i]->Ic[3](1) / pow(bodyObject->legs[i]->Reff, 2) + bodyObject->legs[i]->Mc[3];
@@ -996,19 +997,23 @@ namespace Quadruped
         Eigen::Matrix<double, 4, 3> s = Eigen::Matrix<double, 4, 3>::Zero();
         //s(0, 0) = -fftauRatio[0];
         s(0, 0) = -1;
-        dynamicLeft.block(6, 0, 4, 3) = s * bodyObject->Rsbh_c.transpose() * _slope.transpose();
+        //dynamicLeft.block(6, 0, 4, 3) = s * bodyObject->Rsbh_c.transpose() * _slope.transpose();
+        dynamicLeft.block(6, 0, 4, 3) = s * bodyObject->Rsbw_c[0].transpose();
         s(0, 0) = 0;
         /*s(1, 0) = -fftauRatio[1];*/
         s(1, 0) = -1;
-        dynamicLeft.block(6, 3, 4, 3) = s * bodyObject->Rsbh_c.transpose() * _slope.transpose();
+        /*dynamicLeft.block(6, 3, 4, 3) = s * bodyObject->Rsbh_c.transpose() * _slope.transpose();*/
+        dynamicLeft.block(6, 3, 4, 3) = s * bodyObject->Rsbw_c[1].transpose();
         s(1, 0) = 0;
         //s(2, 0) = -fftauRatio[2];
         s(2, 0) = -1;
-        dynamicLeft.block(6, 6, 4, 3) = s * bodyObject->Rsbh_c.transpose() * _slope.transpose();
+        //dynamicLeft.block(6, 6, 4, 3) = s * bodyObject->Rsbh_c.transpose() * _slope.transpose();
+        dynamicLeft.block(6, 6, 4, 3) = s * bodyObject->Rsbw_c[2].transpose();
         s(2, 0) = 0;
         /*s(3, 0) = -fftauRatio[3];*/
         s(3, 0) = -1;
-        dynamicLeft.block(6, 9, 4, 3) = s * bodyObject->Rsbh_c.transpose() * _slope.transpose();
+        //dynamicLeft.block(6, 9, 4, 3) = s * bodyObject->Rsbh_c.transpose() * _slope.transpose();
+        dynamicLeft.block(6, 9, 4, 3) = s * bodyObject->Rsbw_c[3].transpose();
     }
 
     void QpwPVCtrl::importWeight(const VectorXd& _Q, const VectorXd& _F, const VectorXd& _R, const VectorXd& _W)
@@ -1047,7 +1052,8 @@ namespace Quadruped
         {
             currentBalanceState.pe(i) = (bodyObject->Rsbh_c.transpose() * bodyObject->Rsb_c * bodyObject->currentBodyState.leg_b[i].Position)(0);
             //currentBalanceState.pe(i) = bodyObject->currentWorldState.leg_s[i].Position(0);
-            currentBalanceState.pe_dot(i) = (bodyObject->Rsbh_c.transpose() * bodyObject->currentWorldState.leg_s[i].VelocityW)(0);
+            /*currentBalanceState.pe_dot(i) = (bodyObject->Rsbh_c.transpose() * bodyObject->currentWorldState.leg_s[i].VelocityW)(0);*/
+            currentBalanceState.pe_dot(i) = bodyObject->currentBodyState.leg_b[i].VelocityW(0);
         }
         //std::cout << "cbpe: \n" << currentBalanceState.pe_dot << std::endl;
     }
@@ -1184,7 +1190,7 @@ namespace Quadruped
                 _Aub.setConstant(100000.);
                 _tcA(0 + 2 * i, 2 + 3 * i) = u;
                 _tcA(1 + 2 * i, 2 + 3 * i) = u;
-                _tcA.block(2 * i, 3 * i, 2, 3) = _tcA.block(2 * i, 3 * i, 2, 3) * bodyObject->Rsbh_c.transpose() * _slope.transpose();
+                _tcA.block(2 * i, 3 * i, 2, 3) = _tcA.block(2 * i, 3 * i, 2, 3) * bodyObject->Rsbw_c[i];
                 _tcA(0 + 2 * i, 12 + i) = 1. / bodyObject->legs[i]->Reff;
                 _tcA(1 + 2 * i, 12 + i) = -1. / bodyObject->legs[i]->Reff;
                 this->Aub.block(20 + 2 * i, 0, 2, 1).setConstant(100000.);

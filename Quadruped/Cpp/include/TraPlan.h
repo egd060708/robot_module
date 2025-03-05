@@ -439,8 +439,9 @@ namespace Quadruped {
 		double fbp;
 
 		/* 配置关键不等式约束 */
-		void updateJointIeqConstrain(const Eigen::Vector<double, 11>& _aMax, const Eigen::Vector3d& _bhAcc)
+		void updateJointIeqConstrain(const Eigen::Vector<double, 11>& _aMax, const Eigen::Vector3d& _bAcc)
 		{
+			Eigen::Vector3d _bhAcc = this->Rsbh_c.transpose() * this->Rsb_c * _bAcc;
 			// 平衡约束转化为线性锥约束
 			Eigen::Matrix<double, 8, 3> cbA;
 			cbA.setZero();

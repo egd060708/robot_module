@@ -58,6 +58,10 @@ namespace Quadruped
         Matrix3d Rsb_t = Matrix3d::Identity(); // (目标)世界坐标系到机身坐标系的旋转矩阵映射
         Matrix4d Tsb_t = Matrix4d::Identity(); // (目标)世界坐标系到机身坐标系的齐次变换映射
         Matrix3d dEuler2W = Matrix3d::Identity(); // 轴角速度转到欧拉角角速度
+        Matrix3d Rsbf_c[4] = { Matrix3d::Identity() };// (当前)世界坐标系到足端坐标系的旋转矩阵映射
+        Matrix4d Tsbf_c[4] = { Matrix4d::Identity() };// (当前)世界坐标系到足端坐标系的旋转矩阵映射
+        Matrix3d Rsbw_c[4] = { Matrix3d::Identity() };// (当前)世界坐标系到轮坐标系的旋转矩阵映射
+        Matrix4d Tsbw_c[4] = { Matrix4d::Identity() };// (当前)世界坐标系到轮坐标系的旋转矩阵映射
 
         double Mb[3] = {};      // 机器人机体质量(包括头部，中段和尾部)
         Vector<double, 6> Ib[3] = {};    // 机器人单刚体动力学机身转动惯量
@@ -87,7 +91,7 @@ namespace Quadruped
         /* 更新中性立足点 */
         void updateLegsXYPosition(Eigen::Matrix<double, 3, 4> _initLegsXYPosition);
         /* 计算齐次变换矩阵(direction为1，则是当前；为 - 1，则是目标) */
-        void calTbs(int8_t direction);
+        void calTbs(int8_t direction, const Eigen::Vector3d& _slopeN);
         /* 四足运动学：改变四条腿足端的位置从而改变机器人机身的位置和姿态
            计算单腿基坐标系与机身坐标系下的足端位置转换(direction为1，则是(当前)腿->身；为-1，则是(目标)身->腿) */
         void legAndBodyPosition(int8_t direction);
@@ -182,7 +186,7 @@ namespace Quadruped
         return m;
     }
 
-    void Body::calTbs(int8_t direction)
+    void Body::calTbs(int8_t direction, const Eigen::Vector3d& _slopeN)
     {
         if (direction == 1)
         {
@@ -191,6 +195,8 @@ namespace Quadruped
             Rsb_c = rotation_c;
             currentBodyState.Ang_xyz = rotMatToEulerZYX(Rsb_c);
             Eigen::AngleAxisd rotationz_c(currentBodyState.Ang_xyz(2), Eigen::Vector3d::UnitZ());
+            Eigen::AngleAxisd rotationy_c(currentBodyState.Ang_xyz(1), Eigen::Vector3d::UnitY());
+            Eigen::AngleAxisd rotationx_c(currentBodyState.Ang_xyz(0), Eigen::Vector3d::UnitX());
             Rsbh_c = rotationz_c.toRotationMatrix();
             Tsb_c.block<3, 3>(0, 0) = Rsb_c;
             Tsb_c.block<3, 1>(0, 3) = currentWorldState.dist;
@@ -201,6 +207,34 @@ namespace Quadruped
             currentWorldState.angVel_xyz = Rsb_c * currentBodyState.angVel_xyz;
             currentWorldState.linAcc_xyz = Rsb_c * currentBodyState.linAcc_xyz;
             est->updateTsb(Tsb_c);
+            // 足端姿态正运动学
+            for (int i = 0; i < 4; i++)
+            {
+                Eigen::AngleAxisd rotation_hip(this->legs[i]->currentJoint.Angle(0), Eigen::Vector3d::UnitX());
+                Eigen::AngleAxisd rotation_thigh(this->legs[i]->currentJoint.Angle(1), Eigen::Vector3d::UnitY());
+                Eigen::AngleAxisd rotation_calf(this->legs[i]->currentJoint.Angle(2), Eigen::Vector3d::UnitY());
+                this->Rsbf_c[i] = this->Rsb_c * (rotation_hip * rotation_thigh * rotation_calf).toRotationMatrix();
+                this->Tsbf_c[i].block(0, 0, 3, 3) = this->Rsbf_c[i];
+                this->Tsbf_c[i].block(0, 3, 3, 1) = currentWorldState.dist + this->currentWorldState.leg_s[i].Position;
+            }
+            // 轮坐标系简化计算，直接通过地形得到z轴，足端姿态正运动学得到y轴，叉乘得到x轴，然后用等效轴角计算旋转矩阵
+            for (int i = 0; i < 4; i++)
+            {
+                Eigen::Vector3d zAxis = _slopeN;
+                Eigen::Vector3d yAxis = this->Rsbf_c[i] * Eigen::Vector3d(0, 1., 0);
+                Eigen::Vector3d xAxis = yAxis.cross(zAxis);
+                xAxis.normalize();
+                Eigen::Vector3d refNormal(1., 0, 0);
+                Vector3d cross = refNormal.cross(xAxis);
+                double costheta = refNormal.dot(xAxis);
+                double sintheta = cross.norm();
+                cross.normalize();
+                Matrix3d K;
+                K << 0, -cross(2), cross(1), cross(2), 0, -cross(0), -cross(1), cross(0), 0;
+                this->Rsbw_c[i] = Matrix3d::Identity() + sintheta * K + (1 - costheta) * K * K;
+                this->Tsbw_c[i].block(0, 0, 3, 3) = this->Rsbw_c[i];
+                this->Tsbw_c[i].block(0, 3, 3, 1) = currentWorldState.dist + this->currentWorldState.leg_s[i].Position;
+            }
         }
         else if (direction == -1)
         {
