@@ -155,17 +155,57 @@ namespace Quadruped {
 		Eigen::Matrix3d getSlopeRotation()
 		{
 			Vector3d refNormal(0, 0, 1);
-			Vector3d cross = refNormal.cross(this->estNormal);
-			//std::cout << "axis: \n" << cross << std::endl;
-			double costheta = refNormal.dot(this->estNormal);
-			double sintheta = cross.norm();
-			cross.normalize();
-			//std::cout << "angle: \n" << acos(costheta) << std::endl;
-			Matrix3d K;
-			K << 0, -cross(2), cross(1), cross(2), 0, -cross(0), -cross(1), cross(0), 0;
-			//std::cout << "K: \n" << K << std::endl;
-			Matrix3d R = Matrix3d::Identity() + sintheta * K + (1 - costheta) * K * K;
-			return R;
+			//Vector3d cross = refNormal.cross(this->estNormal);
+			////std::cout << "axis: \n" << cross << std::endl;
+			//double costheta = refNormal.dot(this->estNormal);
+			//double sintheta = cross.norm();
+			//cross.stableNormalize();
+			///*std::cout << "axis: \n" << cross << std::endl;*/
+			//Matrix3d K;
+			//K << 0, -cross(2), cross(1), cross(2), 0, -cross(0), -cross(1), cross(0), 0;
+			////std::cout << "K: \n" << K << std::endl;
+			//Matrix3d R = Matrix3d::Identity() + sintheta * K + (1 - costheta) * K * K;
+			//return R;
+			return this->computeRotationMatrix(refNormal, this->estNormal);
+		}
+
+		Eigen::Matrix3d computeRotationMatrix(const Eigen::Vector3d& u, const Eigen::Vector3d& v) {
+			// 归一化输入向量
+			Eigen::Vector3d u_norm = u.normalized();
+			Eigen::Vector3d v_norm = v.normalized();
+
+			// 计算旋转轴
+			Eigen::Vector3d k = u_norm.cross(v_norm);
+			double k_norm = k.norm();
+
+			// 处理共线情况（旋转角为 0 或 180°）
+			if (k_norm < 1e-6) {
+				// 如果 u 和 v 方向相同，返回单位矩阵
+				if (u_norm.dot(v_norm) > 0) {
+					return Eigen::Matrix3d::Identity();
+				}
+				// 如果 u 和 v 方向相反，返回绕任意垂直轴的 180° 旋转
+				else {
+					// 找到一个与 u 垂直的向量
+					Eigen::Vector3d perpendicular = u_norm.unitOrthogonal();
+					Eigen::AngleAxisd rotation(M_PI, perpendicular);
+					return rotation.toRotationMatrix();
+				}
+			}
+
+			// 归一化旋转轴
+			k.normalize();
+
+			// 计算旋转角
+			double cos_theta = u_norm.dot(v_norm);
+			double theta = acos(cos_theta);
+
+			// 构造四元数
+			Eigen::Quaterniond q;
+			q = Eigen::AngleAxisd(theta, k);
+
+			// 转换为旋转矩阵
+			return q.toRotationMatrix();
 		}
 	};
 }

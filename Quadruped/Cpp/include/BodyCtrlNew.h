@@ -926,6 +926,7 @@ namespace Quadruped
         void setVelocityTarget(const Vector3d& _p_dot, const Vector3d& _r_dot, const Vector4d& _pe_dot);
         // 执行mpc控制器
         void mpc_adjust(const VectorX<bool>& _enList) override;
+        void mpc_adjust(const VectorX<bool>& _enList, const Eigen::Matrix3d& _slope);
         // 设置接触约束
         void setContactConstrain(const Vector4i& _contact,const Eigen::Matrix<double, 3, 4>& _swingForce);
         void setContactConstrain(const Vector4i& _contact, const Eigen::Matrix<double, 3, 4>& _swingForce, const Eigen::Matrix3d& _slope);
@@ -984,7 +985,7 @@ namespace Quadruped
             //Pbi = (currentBodyState.leg_b[i].Position - Pb);
             dynamicLeft.block<3, 3>(0, i * 3) = fftauRatio[i] * Eigen::Matrix3d::Identity();
             dynamicLeft.block<3, 3>(3, i * 3) = fftauRatio[i] * bodyObject->v3_to_m3(Pbi);
-            dynamicLeft.block(3, 12 + i, 3, 1) = -bodyObject->Rsbf_c[i].transpose().col(1);// 加上轮子扭矩对机身的反扭矩作用
+            dynamicLeft.block(3, 12 + i, 3, 1) = -bodyObject->Rsbf_c[i].col(1);// 加上轮子扭矩对机身的反扭矩作用
 
             // 轮相关物理参数更新
             dynamicRight(6 + i, 6 + i) = bodyObject->legs[i]->Ic[3](1) / pow(bodyObject->legs[i]->Reff, 2) + bodyObject->legs[i]->Mc[3];
@@ -997,23 +998,23 @@ namespace Quadruped
         Eigen::Matrix<double, 4, 3> s = Eigen::Matrix<double, 4, 3>::Zero();
         //s(0, 0) = -fftauRatio[0];
         s(0, 0) = -1;
-        //dynamicLeft.block(6, 0, 4, 3) = s * bodyObject->Rsbh_c.transpose() * _slope.transpose();
-        dynamicLeft.block(6, 0, 4, 3) = s * bodyObject->Rsbw_c[0].transpose();
+        dynamicLeft.block(6, 0, 4, 3) = s * bodyObject->Rsbh_c.transpose() * _slope.transpose();
+        //dynamicLeft.block(6, 0, 4, 3) = s * bodyObject->Rsbw_c[0].transpose();
         s(0, 0) = 0;
         /*s(1, 0) = -fftauRatio[1];*/
         s(1, 0) = -1;
-        /*dynamicLeft.block(6, 3, 4, 3) = s * bodyObject->Rsbh_c.transpose() * _slope.transpose();*/
-        dynamicLeft.block(6, 3, 4, 3) = s * bodyObject->Rsbw_c[1].transpose();
+        dynamicLeft.block(6, 3, 4, 3) = s * bodyObject->Rsbh_c.transpose() * _slope.transpose();
+        //dynamicLeft.block(6, 3, 4, 3) = s * bodyObject->Rsbw_c[1].transpose();
         s(1, 0) = 0;
         //s(2, 0) = -fftauRatio[2];
         s(2, 0) = -1;
-        //dynamicLeft.block(6, 6, 4, 3) = s * bodyObject->Rsbh_c.transpose() * _slope.transpose();
-        dynamicLeft.block(6, 6, 4, 3) = s * bodyObject->Rsbw_c[2].transpose();
+        dynamicLeft.block(6, 6, 4, 3) = s * bodyObject->Rsbh_c.transpose() * _slope.transpose();
+        //dynamicLeft.block(6, 6, 4, 3) = s * bodyObject->Rsbw_c[2].transpose();
         s(2, 0) = 0;
         /*s(3, 0) = -fftauRatio[3];*/
         s(3, 0) = -1;
-        //dynamicLeft.block(6, 9, 4, 3) = s * bodyObject->Rsbh_c.transpose() * _slope.transpose();
-        dynamicLeft.block(6, 9, 4, 3) = s * bodyObject->Rsbw_c[3].transpose();
+        dynamicLeft.block(6, 9, 4, 3) = s * bodyObject->Rsbh_c.transpose() * _slope.transpose();
+        //dynamicLeft.block(6, 9, 4, 3) = s * bodyObject->Rsbw_c[3].transpose();
     }
 
     void QpwPVCtrl::importWeight(const VectorXd& _Q, const VectorXd& _F, const VectorXd& _R, const VectorXd& _W)
@@ -1124,6 +1125,43 @@ namespace Quadruped
         }
     }
 
+    void QpwPVCtrl::mpc_adjust(const VectorX<bool>& _enList, const Eigen::Matrix3d& _slope)
+    {
+        A.block(0, 10, 3, 3) = Eigen::Matrix3d::Identity();
+        A.block(3, 13, 3, 3) = bodyObject->Rsb_c.transpose();
+        A.block(6, 16, 4, 4) = Eigen::Matrix4d::Identity();
+        A.block(10, 20, 3, 3) = Eigen::Matrix3d::Identity();
+        for (int i = 0; i < 4; i++)
+        {
+            A.block(16, 20, 4, 3).row(i) = (bodyObject->legs[i]->Mc[3] / (bodyObject->legs[i]->Ic[3](1) / pow(bodyObject->legs[i]->Reff, 2) + bodyObject->legs[i]->Mc[3])) * (bodyObject->Rsbh_c.transpose()*_slope.transpose()).row(0);
+        }
+        B.block(10, 0, 10, 16) = dynamicRight.inverse() * dynamicLeft;
+        balanceController.setConstrain(lb, ub);
+        balanceController.setBoxConstrain(cA, Alb, Aub);
+        y.block<3, 1>(0, 0) = targetBalanceState.p;
+        y.block<3, 1>(3, 0) = targetBalanceState.r;
+        y.block<4, 1>(6, 0) = targetBalanceState.pe;
+        y.block<3, 1>(10, 0) = targetBalanceState.p_dot;
+        y.block<3, 1>(13, 0) = targetBalanceState.r_dot;
+        y.block<4, 1>(16, 0) = targetBalanceState.pe_dot;
+        y.block<3, 1>(20, 0) = g;
+        x.block<3, 1>(0, 0) = currentBalanceState.p;
+        x.block<3, 1>(3, 0) = currentBalanceState.r;
+        x.block<4, 1>(6, 0) = currentBalanceState.pe;
+        x.block<3, 1>(10, 0) = currentBalanceState.p_dot;
+        x.block<3, 1>(13, 0) = currentBalanceState.r_dot;
+        x.block<4, 1>(16, 0) = currentBalanceState.pe_dot;
+        x.block<3, 1>(20, 0) = g;
+        balanceController.mpc_update(y, x, 1000, 0.02);
+        balanceController.mpc_init(A, B, Q, F, R, W, dt);
+        balanceController.mpc_solve(0);
+        for (int i = 0; i < 4; i++)
+        {
+            this->mpcOut.block(0, i, 3, 1) = -bodyObject->Rsb_c.transpose() * balanceController.getOutput().block<3, 1>(3 * i, 0);
+            this->mpcOut(3, i) = balanceController.getOutput()(12 + i, 0);
+        }
+    }
+
     void QpwPVCtrl::setContactConstrain(const Vector4i& _contact,const Eigen::Matrix<double, 3, 4>& _swingForce)
     {
         Eigen::Matrix<double, 5, 3> _fcA;
@@ -1181,6 +1219,7 @@ namespace Quadruped
         Eigen::Matrix<double, 8, 16> _tcA;
         _tcA.setZero();
         // 若该腿不触地，则清零约束矩阵
+        //std::cout << "o: " << bodyObject->Rsbh_c.transpose() * _slope.transpose() << std::endl;
         for (int i = 0; i < 4; i++)
         {
             if (_contact(i) == 1)
@@ -1190,7 +1229,8 @@ namespace Quadruped
                 _Aub.setConstant(100000.);
                 _tcA(0 + 2 * i, 2 + 3 * i) = u;
                 _tcA(1 + 2 * i, 2 + 3 * i) = u;
-                _tcA.block(2 * i, 3 * i, 2, 3) = _tcA.block(2 * i, 3 * i, 2, 3) * bodyObject->Rsbw_c[i];
+                _tcA.block(2 * i, 3 * i, 2, 3) = _tcA.block(2 * i, 3 * i, 2, 3) * bodyObject->Rsbh_c.transpose() * _slope.transpose();
+                //_tcA.block(2 * i, 3 * i, 2, 3) = _tcA.block(2 * i, 3 * i, 2, 3) * bodyObject->Rsbw_c[i].transpose();
                 _tcA(0 + 2 * i, 12 + i) = 1. / bodyObject->legs[i]->Reff;
                 _tcA(1 + 2 * i, 12 + i) = -1. / bodyObject->legs[i]->Reff;
                 this->Aub.block(20 + 2 * i, 0, 2, 1).setConstant(100000.);
