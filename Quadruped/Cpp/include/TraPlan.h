@@ -735,6 +735,11 @@ namespace Quadruped {
 			}
 			return realPlr;
 		}
+		Eigen::Vector4d getMus()
+		{
+			Vector4d ret(this->balanceConeX, this->balanceConeY, this->fbp * this->balanceConeX, this->fbp * this->balanceConeY);
+			return ret;
+		}
 	};
 
 }

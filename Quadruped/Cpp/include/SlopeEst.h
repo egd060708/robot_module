@@ -179,7 +179,7 @@ namespace Quadruped {
 			double k_norm = k.norm();
 
 			// 处理共线情况（旋转角为 0 或 180°）
-			if (k_norm < 1e-6) {
+			if (k_norm < 1e-3) {
 				// 如果 u 和 v 方向相同，返回单位矩阵
 				if (u_norm.dot(v_norm) > 0) {
 					return Eigen::Matrix3d::Identity();

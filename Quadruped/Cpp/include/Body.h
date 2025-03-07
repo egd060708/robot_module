@@ -134,7 +134,8 @@ namespace Quadruped
         Eigen::Vector<double, 6> parallelAxis(const Vector3d& dstAxis, const Vector3d& oriAxis, const Vector<double, 6>& oriIm, const double oriM);// 平行轴定理
         Eigen::Matrix3d aI2mI(const Vector<double, 6>& oriIm);
         Eigen::Matrix3d eulerVelToRotVel(const Vector3d& _euler);
-        Eigen::Matrix3d computeRotationMatrix(const Eigen::Vector3d& u, const Eigen::Vector3d& v);
+        Eigen::Matrix3d axisToRotationMatrixQ(const Eigen::Vector3d& _u, const Eigen::Vector3d& _v);
+        Eigen::Matrix3d axisToRotationMatrixR(const Eigen::Vector3d& _u, const Eigen::Vector3d& _v);
     };
 
     Body::Body(EstBase* _est,Leg* _legObj[4], double _dt)
@@ -227,21 +228,12 @@ namespace Quadruped
                 Eigen::Vector3d xAxis = yAxis.cross(zAxis);
                 xAxis.normalize();
                 Eigen::Vector3d refNormal(1., 0, 0);
-                //Vector3d cross = refNormal.cross(xAxis);
-                //double costheta = refNormal.dot(xAxis);
-                //double sintheta = cross.norm();
-                //double halfcostheta = sqrt(0.5 * (1 + costheta));
-                //double halfsintheta = sqrt(0.5 * (1 - costheta));
-                //cross.normalize();
-                //Eigen::Vector4d rQuat(halfcostheta, halfsintheta * cross(0), halfsintheta * cross(1), halfsintheta * cross(2));
-                ///*Matrix3d K;
-                //K << 0, -cross(2), cross(1), cross(2), 0, -cross(0), -cross(1), cross(0), 0;
-                //this->Rsbw_c[i] = Matrix3d::Identity() + sintheta * K + (1 - costheta) * K * K;*/
-                //this->Rsbw_c[i] = this->quatToRot(rQuat);
-                this->Rsbw_c[i] = this->computeRotationMatrix(refNormal, xAxis);
+                this->Rsbw_c[i] = this->axisToRotationMatrixQ(refNormal, xAxis);
                 this->Tsbw_c[i].block(0, 0, 3, 3) = this->Rsbw_c[i];
                 this->Tsbw_c[i].block(0, 3, 3, 1) = currentWorldState.dist + this->currentWorldState.leg_s[i].Position;
                 //std::cout << i << ": " << this->Rsbw_c[i].transpose() << std::endl;
+                /*std::cout << xAxis << std::endl;
+                std::cout << _slopeN << std::endl;*/
             }
         }
         else if (direction == -1)
@@ -686,26 +678,40 @@ namespace Quadruped
         return t;
     }
 
-    Eigen::Matrix3d Body::computeRotationMatrix(const Eigen::Vector3d& u, const Eigen::Vector3d& v) {
+    Eigen::Matrix3d Body::axisToRotationMatrixQ(const Eigen::Vector3d& _u, const Eigen::Vector3d& _v) {
         // 归一化输入向量
-        Eigen::Vector3d u_norm = u.normalized();
-        Eigen::Vector3d v_norm = v.normalized();
+        Eigen::Vector3d u_norm = _u.normalized();
+        Eigen::Vector3d v_norm = _v.normalized();
 
         // 计算旋转轴
         Eigen::Vector3d k = u_norm.cross(v_norm);
         double k_norm = k.norm();
+        double dot = u_norm.dot(v_norm);
 
         // 处理共线情况（旋转角为 0 或 180°）
-        if (k_norm < 1e-6) {
+        if (k_norm < 1e-3) {
             // 如果 u 和 v 方向相同，返回单位矩阵
-            if (u_norm.dot(v_norm) > 0) {
+            if (dot > 0) {
                 return Eigen::Matrix3d::Identity();
             }
             // 如果 u 和 v 方向相反，返回绕任意垂直轴的 180° 旋转
             else {
                 // 找到一个与 u 垂直的向量
-                Eigen::Vector3d perpendicular = u_norm.unitOrthogonal();
+                //Eigen::Vector3d perpendicular = u_norm.unitOrthogonal();
+                Eigen::Vector3d perpendicular(0, 0, 1.);
                 Eigen::AngleAxisd rotation(M_PI, perpendicular);
+                //std::cout << "stuck: " << std::endl;
+                return rotation.toRotationMatrix();
+            }
+        }
+        // 不能接近pi，否则已经出现问题
+        if (k_norm < 0.15)
+        {
+            if (dot < 0)
+            {
+                Eigen::Vector3d perpendicular(0, 0, 1.);
+                Eigen::AngleAxisd rotation(M_PI, perpendicular);
+                //std::cout << "stuck: " << std::endl;
                 return rotation.toRotationMatrix();
             }
         }
@@ -723,5 +729,55 @@ namespace Quadruped
 
         // 转换为旋转矩阵
         return q.toRotationMatrix();
+    }
+
+    Eigen::Matrix3d Body::axisToRotationMatrixR(const Eigen::Vector3d& _u, const Eigen::Vector3d& _v)
+    {
+        // 归一化输入向量
+        Eigen::Vector3d u_norm = _u.normalized();
+        Eigen::Vector3d v_norm = _v.normalized();
+
+        // 计算旋转轴
+        Eigen::Vector3d k = u_norm.cross(v_norm);
+        double k_norm = k.norm();
+        double dot = u_norm.dot(v_norm);
+
+        // 处理共线情况（旋转角为 0 或 180°）
+        if (k_norm < 1e-3) {
+            // 如果 u 和 v 方向相同，返回单位矩阵
+            if (dot > 0) {
+                return Eigen::Matrix3d::Identity();
+            }
+            // 如果 u 和 v 方向相反，返回绕任意垂直轴的 180° 旋转
+            else {
+                // 找到一个与 u 垂直的向量
+                //Eigen::Vector3d perpendicular = u_norm.unitOrthogonal();
+                Eigen::Vector3d perpendicular(0, 0, 1.);
+                Eigen::AngleAxisd rotation(M_PI, perpendicular);
+                //std::cout << "stuck: " << std::endl;
+                return rotation.toRotationMatrix();
+            }
+        }
+
+        if (k_norm < 0.15)
+        {
+            if (dot < 0)
+            {
+                Eigen::Vector3d perpendicular(0, 0, 1.);
+                Eigen::AngleAxisd rotation(M_PI, perpendicular);
+                //std::cout << "stuck: " << std::endl;
+                return rotation.toRotationMatrix();
+            }
+        }
+
+        // 归一化旋转轴
+        k.normalize();
+
+        double costheta = dot;
+        double sintheta = k_norm;
+        Matrix3d K;
+        K << 0, -k(2), k(1), k(2), 0, -k(0), -k(1), k(0), 0;
+        Matrix3d R = Matrix3d::Identity() + sintheta * K + (1 - costheta) * K * K;
+        return R;
     }
 }
