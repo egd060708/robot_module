@@ -4,6 +4,7 @@
 #include "BodyCtrlNew.h"
 #include "LegCtrl.h"
 #include "mathTool.h"
+#include <vector>
 using namespace std;
 
 #define M_PI 3.14159265358979323846
@@ -13,7 +14,8 @@ namespace Quadruped
 	enum class WaveStatus {
 		STANCE_ALL = 0,
 		SWING_ALL = 1,
-		WAVE_ALL = 2
+		WAVE_ALL = 2,
+		ADAPT = 3
 	};
 
 	class GaitCtrl
@@ -27,9 +29,13 @@ namespace Quadruped
 		void initSwingParams(double _period, double _stancePhaseRatio, Eigen::Vector4d _bias, double _t);// 初始化摆动相关参数
 		void calcWave(Eigen::Vector4d& phase, Eigen::Vector4i& contact, WaveStatus status, double _t, Eigen::Vector4d& _estPhase, Eigen::Vector4i& _estContact);
 		void calcContactPhase(WaveStatus status, double _t, Eigen::Vector4d& _estPhase, Eigen::Vector4i& _estContact);
+
+		void footPointMarking();
+		void footStateTransform(double _t);
+		void footAdapt();
 		
 		void setGait(Eigen::Vector2d vxyTargetGlobal, double dYawTarget, double gaitHeight);
-		void run(Eigen::Matrix<double, 3, 4>& _feetPos, Eigen::Matrix<double, 3, 4>& _feetVel, double _maxStepL,const Eigen::Matrix3d& _slope);
+		void run(Eigen::Matrix<double, 3, 4>& _feetPos, Eigen::Matrix<double, 3, 4>& _feetVel, double _maxStepL, const Eigen::Matrix3d& _slope);
 		Eigen::Vector3d getFootPos(int i);
 		Eigen::Vector3d getFootVel(int i);
 		void restart();
@@ -50,6 +56,9 @@ namespace Quadruped
 		double Tstance, Tswing;
 		double kx, ky, kyaw;
 		Eigen::Vector3d initLeg[4];
+		Eigen::Vector4d fpmark = Eigen::Vector4d::Ones();
+		Eigen::Vector4i recoverflag = Eigen::Vector4i::Zero();
+		Eigen::Vector4i recoverflaglast = Eigen::Vector4i::Zero();
 		// 接触状态与摆动状态检测
 		double period;// 步态周期p
 		double stRatio;// 触地系数r(归一化)
@@ -62,8 +71,8 @@ namespace Quadruped
 		Eigen::Vector4i contactPast = Eigen::Vector4i::Zero();
 		Eigen::Vector4i switchStatus = Eigen::Vector4i::Zero();// 是否能够切换状态，1为可以，0不可
 		WaveStatus statusPast;
-		double passT;
-		double startT;
+		Eigen::Vector4d passT;
+		Eigen::Vector4d startT;
 		// 摆动曲线生成
 		double gaitHeight;
 		Eigen::Vector2d VxyTarget;
@@ -137,7 +146,7 @@ namespace Quadruped
 		stRatio = _stancePhaseRatio;
 		estStRatio.setConstant(_stancePhaseRatio);
 		bias = _bias;
-		startT = _t;
+		startT.setConstant(_t);
 		contactPast.setZero();
 		phasePast.setConstant(0.5);
 		statusPast = WaveStatus::STANCE_ALL;
@@ -216,6 +225,12 @@ namespace Quadruped
 		footPos = bodyController->currentBalanceState.p + nextStep;
 		footPos(2) = 0.0;
 
+		/*if (this->statusPast == WaveStatus::ADAPT)
+		{
+			footPos = bodyController->currentBalanceState.p + bodyController->bodyObject->Rsbh_c * initLeg[legID];
+			footPos(2) = 0;
+		}*/
+
 		/*footPos = bodyController->currentBalanceState.p + _slope.transpose() * nextStep;
 		footPos(2) = 0.0;*/
 
@@ -227,21 +242,21 @@ namespace Quadruped
 		static Vector4i lastEstContact = Vector4i::Ones();
 		if (status == WaveStatus::WAVE_ALL)
 		{
-			passT = _t - startT;
+			passT = Eigen::Vector4d::Constant(_t) - startT;
 			for (int i(0); i < 4; ++i)
 			{
 				// 得到总的步态周期相位
-				normalT(i) = fmod(passT + period - period * bias(i), period) / period;// 取余操作并归一化
+				normalT(i) = fmod(passT(i) + period - period * bias(i), period) / period;// 取余操作并归一化
 				// 根据归一化的T判断应该是接触地面还是摆动
 				if (normalT(i) < (1 - stRatio))
 				{
-					// 计算触地过程中的相位变化0-1
+					// 计算非触地过程中的相位变化0-1
 					contact(i) = 0;
 					phase(i) = normalT(i) / (1 - stRatio);
 				}
 				else
 				{
-					// 计算非触地过程中的相位变化0-1
+					// 计算触地过程中的相位变化0-1
 					contact(i) = 1;
 					phase(i) = (normalT(i) + stRatio - 1) / stRatio;
 				}
@@ -275,6 +290,43 @@ namespace Quadruped
 			_estContact.setOnes();
 			_estPhase.setConstant(0.5);
 		}
+		else if (status == WaveStatus::ADAPT)
+		{
+			passT = Eigen::Vector4d::Constant(_t) - startT;
+			for (int i = 0; i < 4; i++)
+			{
+				if (this->recoverflag(i) == 1)
+				{
+					// 得到总的步态周期相位(针对每个足端的独立调整不需要考虑步态偏置)
+					normalT(i) = fmod(passT(i) + 0.95 * period, period) / period;// 取余操作并归一化
+					// 根据归一化的T判断应该是接触地面还是摆动
+					if (normalT(i) < (1 - stRatio))
+					{
+						// 计算非触地过程中的相位变化0-1
+						contact(i) = 0;
+						phase(i) = normalT(i) / (1 - stRatio);
+					}
+					else
+					{
+						// 计算触地过程中的相位变化0-1
+						contact(i) = 1;
+						phase(i) = (normalT(i) + stRatio - 1) / stRatio;
+						this->recoverflag(i) = 0;
+					}
+				}
+				else
+				{
+					contact(i) = 1;
+					phase(i) = 0.5;
+				}
+				
+				//if (passT(i) > 0.95 * period)
+				//{
+				//	// 完整周期结束之后，自动关闭恢复相位
+				//	this->recoverflag(i) = 0;
+				//}
+			}
+		}
 		lastEstContact = _estContact;
 	}
 
@@ -298,6 +350,22 @@ namespace Quadruped
 			else if ((status == WaveStatus::SWING_ALL) && (statusPast == WaveStatus::STANCE_ALL))
 			{
 				contactPast.setZero();
+			}
+			else if ((status == WaveStatus::ADAPT) && (statusPast == WaveStatus::SWING_ALL))
+			{
+				contactPast.setOnes();
+			}
+			else if ((status == WaveStatus::SWING_ALL) && (statusPast == WaveStatus::ADAPT))
+			{
+				contactPast.setOnes();
+			}
+			else if ((status == WaveStatus::ADAPT) && (statusPast == WaveStatus::STANCE_ALL))
+			{
+				contactPast.setOnes();
+			}
+			else if ((status == WaveStatus::SWING_ALL) && (statusPast == WaveStatus::ADAPT))
+			{
+				contactPast.setOnes();
 			}
 		}
 
@@ -354,9 +422,10 @@ namespace Quadruped
 		this->gaitHeight = _gaitHeight;
 	}
 
-	void GaitCtrl::run(Eigen::Matrix<double, 3, 4>& _feetPos, Eigen::Matrix<double, 3, 4>& _feetVel, double _maxStepL,const Eigen::Matrix3d& _slope)
+	void GaitCtrl::run(Eigen::Matrix<double, 3, 4>& _feetPos, Eigen::Matrix<double, 3, 4>& _feetVel, double _maxStepL, const Eigen::Matrix3d& _slope)
 	{
 		if (is_firstRun) {
+			//this->startT.setConstant(_t);
 			//startP = bodyController->bodyObject->est->getEstFeetPosS();
 			startP = bodyController->bodyObject->getFKFeetPos();
 			is_firstRun = false;
@@ -372,6 +441,12 @@ namespace Quadruped
 				_feetVel.col(i).setZero();
 			}
 			else {
+				// 自适应的目标是让足端回到当前中性立足点，要消除速度的影响
+				/*if (this->statusPast == WaveStatus::ADAPT)
+				{
+					VxyTarget = bodyController->currentBalanceState.p_dot.segment(0, 2);
+					dYawTarget = bodyController->currentBalanceState.r_dot(2);
+				}*/
 				endP.col(i) = calFootPosW(i, VxyTarget, dYawTarget, (*gaitPhase)(i), _maxStepL, _slope);
 
 				_feetPos.col(i) = getFootPos(i);
@@ -408,5 +483,111 @@ namespace Quadruped
 	{
 		this->is_firstRun = true;
 		this->VxyTarget.setZero();
+	}
+
+	void GaitCtrl::footPointMarking()
+	{
+		Eigen::Matrix<double, 3, 4> cur = this->bodyController->bodyObject->getFKFeetPosB();
+		Eigen::Matrix<double, 3, 4> tar = this->bodyController->bodyObject->initLegsXYPosition;
+		Eigen::Matrix<double, 3, 4> err = tar - cur;
+		double px = 0.2,py=0.1;
+		for (int i = 0; i < 4; i++)
+		{
+			// eth marking
+			this->fpmark(i) = 1 - sqrt(pow(err(0, i) / px, 2) + pow(err(1, i) / py, 2));
+			// other marking
+			//this->fpmark(i) = exp(-err.block(0, i, 1, 1).squaredNorm() / (2 * px * px) - err.block(1, i, 1, 1).squaredNorm() / (2 * py * py));
+		}
+		std::cout << "mark: " << this->fpmark.transpose() << std::endl;
+	}
+
+	void GaitCtrl::footStateTransform(double _t)
+	{
+		double threshold = 0.;
+		bool required_transform = false;
+		double low = this->fpmark(0);
+		uint8_t low_idx = 0;
+		std::vector<int> lowMark;
+		lowMark.clear();
+		// 找出打分最低的那个
+		for (int i = 0; i < 4; i++)
+		{
+			if (!this->recoverflag(i))
+			{
+				if (this->fpmark(i) < low)
+				{
+					low = this->fpmark(i);
+					low_idx = i;
+				}
+				if (this->fpmark(i) < threshold)
+				{
+					if (low_idx == i)
+					{
+						// 只需要优先处理打分最低的即可
+						lowMark.insert(lowMark.begin(), i);
+					}
+					else
+					{
+						lowMark.push_back(i);
+					}
+				}
+			}
+		}
+		// 若打分最低的超过了阈值，则需要调整
+		if (this->statusPast == WaveStatus::ADAPT)
+		{
+			if (low < threshold)
+			{
+				for (int i = 0; i < lowMark.size(); i++)
+				{
+					// 需要保证相邻的两足端不会同时调整
+					switch (lowMark.at(i)) {
+					case 0:
+						if (!this->recoverflag(1) && !this->recoverflag(2))
+						{
+							this->recoverflag(0) = 1;
+						}
+						break;
+					case 1:
+						if (!this->recoverflag(0) && !this->recoverflag(3))
+						{
+							this->recoverflag(1) = 1;
+						}
+						break;
+					case 2:
+						if (!this->recoverflag(0) && !this->recoverflag(3))
+						{
+							this->recoverflag(2) = 1;
+						}
+						break;
+						break;
+					case 3:
+						if (!this->recoverflag(1) && !this->recoverflag(2))
+						{
+							this->recoverflag(3) = 1;
+						}
+						break;
+					default:
+						break;
+					}
+				}
+			}
+		}
+		else
+		{
+			this->recoverflag.setZero();
+		}
+		
+		// 如果开启了调整需要同步更新起始时间
+		for (int i = 0; i < 4; i++)
+		{
+			if (this->recoverflag(i) != this->recoverflaglast(i))
+			{
+				this->startT(i) = _t;
+			}
+		}
+
+		this->recoverflaglast = this->recoverflag;
+		std::cout << "flag: " << this->recoverflag.transpose() << std::endl;
 	}
 }

@@ -125,6 +125,8 @@ namespace Quadruped
         /* 获取运动学四足点位 */
         Eigen::Matrix<double, 3, 4> getFKFeetPos();
         Eigen::Vector3d getFKFeetPos(int id);
+        Eigen::Matrix<double, 3, 4> getFKFeetPosB();
+        Eigen::Vector3d getFKFeetPosB(int id);
         Eigen::Matrix<double, 3, 4> getFKFeetVel();
         Eigen::Vector3d getFKFeetVel(int i);
 
@@ -582,6 +584,23 @@ namespace Quadruped
     {
         Eigen::Vector3d out;
         out = currentWorldState.leg_s[id].Position;
+        return out;
+    }
+
+    Eigen::Matrix<double, 3, 4> Body::getFKFeetPosB()
+    {
+        Eigen::Matrix<double, 3, 4> out;
+        for (int i = 0; i < 4; i++)
+        {
+            out.block<3, 1>(0, i) = currentBodyState.leg_b[i].Position;
+        }
+        return out;
+    }
+
+    Eigen::Vector3d Body::getFKFeetPosB(int id)
+    {
+        Eigen::Vector3d out;
+        out = currentBodyState.leg_b[id].Position;
         return out;
     }
 

@@ -636,7 +636,7 @@ namespace Quadruped {
 			// Î»ÖÃÔ¼Êø
 			for (int i = 0; i < 4; i++)
 			{
-				this->Plr.col(i) = this->normConstrain(this->Plr.col(i), this->Pli.col(i), 0.8);
+				this->Plr.col(i) = this->normConstrain(this->Plr.col(i), this->Pli.col(i), 0.4);
 			}
 
 		}
